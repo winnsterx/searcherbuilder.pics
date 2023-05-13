@@ -2,12 +2,12 @@ import json
 import constants
 
 def trimTopTen():
-    jsonfile = "result.json"
+    jsonfile = "result_50k.json"
     with open(jsonfile) as file:
         og = json.load(file) 
-        top_ten = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)[:15]) for k, v in og.items()}
+        top_ten = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)[:20]) for k, v in og.items()}
 
-        with open('trimmed.json', 'w') as fp: 
+        with open('top_twenty.json', 'w') as fp: 
             json.dump(top_ten, fp)
 
         return top_ten
@@ -38,6 +38,17 @@ def findDisjoint(top_ten):
     builder69_only = beaver_69 & rsync_69 & fb_69 & builder0x69
     print("only in builder69:", builder69_only)
 
+    preference_by_builder = {
+        constants.BEAVERBUILD: list(beaver_only),
+        constants.BUILDER_0X69: list(builder69_only),
+        constants.RSYNC: list(rsync_only),
+        constants.FLASHBOTS: list(fb_only) 
+    }
+    with open('disjoint.json', 'w') as fp: 
+        json.dump(preference_by_builder, fp)
+
+    return preference_by_builder
+
 def countBlocks():
     with open("block_to_builder_50k.json", mode="r") as fp: 
         block_to_builder = json.load(fp)
@@ -54,5 +65,7 @@ def countBlocks():
     return counter
 
 
-countBlocks()
-# findDisjoint(trimTopTen())
+
+# block_count_by_builder = countBlocks()
+preference_by_builder = findDisjoint(trimTopTen())
+
