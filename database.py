@@ -19,8 +19,10 @@ import secret_keys
 # what other interesting conclusions can be drawn with this dataset?
 # disjoint is not necessarily the most helpful, bigger builders may obscure the smaller builders who r doing sketchy stuff
 
+# global variable that maps builder to searchers
 common_addrs = defaultdict(lambda: defaultdict(int))
 
+# loads the block to builder mapping from json-file into block_to_builder dictionary
 # returns {block: builder} and [blocks]
 def load_block_to_builder():
     jsonfile = "block_to_builder.json"
@@ -30,7 +32,9 @@ def load_block_to_builder():
         return block_to_builder, list(blocks)
 
 
-# block_number: string, block_to_builder: {block_number/string: addr/string}
+# returns fee_recipient of the block, as specified in block_to_builder, 
+# if addr is a known builder, return the colloquial name of builder
+# otherwise, return "builderUnknown: addr"
 def get_block_builder_from_fee_recipient(block_number, block_to_builder):
     builder = block_to_builder[block_number].lower()
     if builder == constants.BUILDER_0X69:
@@ -65,12 +69,11 @@ def get_block_builder_from_fee_recipient(block_number, block_to_builder):
         return "lightspeedbuilder"
     elif builder == constants.THREETHREES: 
         return "threethrees"
-    elif builder == constants.LIDO or builder == constants.STAKEFISH: 
-        return "pools"
     else:
         return "builderUnknown: " + builder
 
-
+# increments the frequency counter of searcher, which can be addr_from/to, for the builder
+# contract is ignored if it is a known dapp contract 
 def incrementBotCount(builder, addr_from, addr_to):
     global common_addrs
 
@@ -81,8 +84,8 @@ def incrementBotCount(builder, addr_from, addr_to):
         common_addrs[builder][addr_to] += 1
 
 
+# maps the extradata to builder 
 def map_extra_data_to_builder(extra_data):
-    print(extra_data)
     if "beaverbuild.org" in extra_data: 
         return "beaverbuild"
     elif "builder0x69" in extra_data:
@@ -101,53 +104,54 @@ def map_extra_data_to_builder(extra_data):
         return extra_data
     
 
+# finds the block builder given block number
 def get_block_builder(w3, block_number, block_to_builder): 
-    # extra_data = w3.eth.get_block(int(block_number)).extraData
-    # # builder = map_extra_data_to_builder(extra_data)
-    # return str(extra_data)
-
+    # first check if a known builder addr is the fee_recipient 
     builder = get_block_builder_from_fee_recipient(block_number, block_to_builder) 
-    if builder == "pools" or builder.startswith("builderUnknown"):
-        # need to find block builder via extraData field 
+
+    # if not fee_recipient is not a known builder, check extradata for further info
+    # occassionally, fee_recipient is set as the validator even tho the block is built by an external known builder
+    if builder.startswith("builderUnknown"):
+        # query for extraData of block using Infura endpoint
         extra_data = str(w3.eth.get_block(int(block_number)).extraData).lower()
         builder = map_extra_data_to_builder(extra_data)
+
     return builder
 
-
+# process all the possible searcher addrs in one block by parsing thru the txs
 def count_addrs_in_one_block(session, w3, url, block_number, block_to_builder):
     global common_addrs
-
     builder = get_block_builder(w3, block_number, block_to_builder)
 
     payload = {
         'block_number': block_number,
         "count": "1"
     }
-
     res = session.get(url, params=payload)
 
     if res.status_code == 200:
         data = res.json()
-        
         print(builder, block_number)
         for tx in data:
             addr_from = tx['address_from'].lower()
             addr_to = tx['address_to'].lower()
             incrementBotCount(builder, addr_from, addr_to)
-
     else: 
         print("error w requesting zeromev:", res.status_code)
 
 
+# filters out all searchers that have interacted with a builder less than 3 times
+# filters out all builders that dont have any searchers that have interacted with the builder more than thrice
+# orders the searchers by their number of txs for each builder
 def clean_up_builder_searcher():
     global common_addrs
-    filter_out_searchers_seen_less_than_thrice = {outer_k: {inner_k: v for inner_k, v in outer_v.items() if v > 3} for outer_k, outer_v in common_addrs.items()}
+    filter_out_searchers_seen_less_than_thrice = {outer_k: {inner_k: v for inner_k, v in outer_v.items() if v > 4} for outer_k, outer_v in common_addrs.items()}
     filter_out_builders_with_nothing = {builder: searchers for builder, searchers in filter_out_searchers_seen_less_than_thrice.items() if searchers}
     ordered_addrs = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)) for k, v in filter_out_builders_with_nothing.items()}
     return ordered_addrs
 
-
-
+# iterate through all the blocks to create a frequency mapping between builders and searchers 
+# use thread pool to expediate process
 def count_addrs(block_to_builder, blocks):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
@@ -171,6 +175,6 @@ def count_addrs(block_to_builder, blocks):
 
 
 block_to_builder, blocks = load_block_to_builder()
-count_addrs(block_to_builder, blocks[:500])
+count_addrs(block_to_builder, blocks)
 
 
