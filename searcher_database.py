@@ -74,13 +74,10 @@ def get_block_builder_from_fee_recipient(block_number, block_to_builder):
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known dapp contract 
-def incrementBotCount(builder, addr_from, addr_to):
+def incrementBotCount(builder, addr_to):
     global common_addrs
 
-    if addr_from not in constants.COMMON_CONTRACTS:
-        common_addrs[builder][addr_from] += 1
-
-    if addr_to not in constants.COMMON_CONTRACTS:
+    if addr_to not in constants.COMMON_CONTRACTS:  
         common_addrs[builder][addr_to] += 1
 
 
@@ -98,7 +95,7 @@ def map_extra_data_to_builder(extra_data):
         return "titan"  
     elif "bloxroute" in extra_data:
         return "bloxroute"
-    elif "linux" or "nethermind" in extra_data:
+    elif "linux" in extra_data or "nethermind" in extra_data:
         return "vanilla_builders"
     else:
         return extra_data
@@ -128,14 +125,14 @@ def count_addrs_in_one_block(session, w3, url, block_number, block_to_builder):
         "count": "1"
     }
     res = session.get(url, params=payload)
+    # print(builder, block_number)
 
     if res.status_code == 200:
         data = res.json()
-        print(builder, block_number)
         for tx in data:
-            addr_from = tx['address_from'].lower()
+            # addr_to = tx['address_from'].lower()
             addr_to = tx['address_to'].lower()
-            incrementBotCount(builder, addr_from, addr_to)
+            incrementBotCount(builder, addr_to)
     else: 
         print("error w requesting zeromev:", res.status_code)
 
@@ -161,6 +158,7 @@ def count_addrs(block_to_builder, blocks):
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
+        print("starting to go thru blocks")
         with ThreadPoolExecutor(max_workers=10) as executor:
             # Use the executor to submit the tasks
             futures = [executor.submit(count_addrs_in_one_block, session, w3, zeromev_url, b, block_to_builder) for b in blocks]
