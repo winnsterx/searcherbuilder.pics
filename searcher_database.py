@@ -23,55 +23,6 @@ import secret_keys
 common_addrs = defaultdict(lambda: defaultdict(int))
 swap_addrs = defaultdict(lambda: defaultdict(int))
 
-# loads the block to builder mapping from json-file into block_to_builder dictionary
-# returns {block: builder} and [blocks]
-def load_block_to_builder():
-    with open(constants.BLOCK_BUILDER_MAP_FILE) as file:
-        block_to_builder = json.load(file) 
-        blocks = block_to_builder.keys()
-        return block_to_builder, list(blocks)
-
-
-# returns fee_recipient of the block, as specified in block_to_builder, 
-# if addr is a known builder, return the colloquial name of builder
-# otherwise, return "builderUnknown: addr"
-def get_block_builder_from_fee_recipient(block_number, block_to_builder):
-    builder = block_to_builder[block_number].lower()
-    if builder == constants.BUILDER_0X69:
-        return "builder0x69"
-    elif builder == constants.BEAVERBUILD:
-        return "beaverbuild"
-    elif builder == constants.RSYNC:
-        return "rsync"
-    elif builder == constants.FLASHBOTS or builder == constants.FLASHBOTS_SGX:
-        return "flashbots"
-    elif builder == constants.ETHBUILDER:
-        return "ethbuilder"
-    elif builder == constants.TITAN:
-        return "titan"
-    elif builder == constants.BLOXROUTE_MAX_PROFIT or builder == constants.BLOXROUTE_REGULATED:
-        return "bloxroute"
-    elif builder == constants.BLOCKNATIVE:
-        return "blocknative"
-    elif builder == constants.F1B:
-        return "f1b"
-    elif builder == constants.BUILDAI:
-        return "buildai"
-    elif builder == constants.BOBABUILDER:
-        return "boba"
-    elif builder == constants.PAYLOAD:
-        return "payload"
-    elif builder == constants.BEE:
-        return "bee"
-    elif builder == constants.EDEN:
-        return "eden"
-    elif builder == constants.LIGHTSPEEDBUILDER_1 or builder == constants.LIGHTSPEEDBUILDER_2:
-        return "lightspeedbuilder"
-    elif builder == constants.THREETHREES: 
-        return "threethrees"
-    else:
-        return "builderUnknown: " + builder
-
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known dapp contract 
 def incrementBotCount(builder, addr_to, mev_type, block_number):
@@ -85,11 +36,11 @@ def incrementBotCount(builder, addr_to, mev_type, block_number):
 
 # maps the extradata to builder 
 def map_extra_data_to_builder(extra_data):
-    if "beaverbuild.org" in extra_data: 
+    if "beaverbuild" in extra_data: 
         return "beaverbuild"
     elif "builder0x69" in extra_data:
         return "builder0x69"
-    elif "rsync-builder.xyz" in extra_data:
+    elif "rsync" in extra_data:
         return "rsync"
     elif "blocknative" in extra_data:
         return "blocknative"
@@ -97,6 +48,28 @@ def map_extra_data_to_builder(extra_data):
         return "titan"  
     elif "bloxroute" in extra_data:
         return "bloxroute"
+    elif "illuminate" in extra_data:
+        return "flashbots"
+    elif "buildai" in extra_data:
+        return "buildai"
+    elif "f1b" in extra_data:
+        return "f1b"
+    elif "eden" in extra_data:
+        return "eden"
+    elif "eth-builder" in extra_data or "ethbuilder" in extra_data:
+        return "ethbuilder"
+    elif "boba" in extra_data:
+        return "boba"
+    elif "lightspeedbuilder" in extra_data:
+        return "lightspeedbuilder"
+    elif "payload.de" in extra_data:
+        return "payload"
+    elif "gambit" in extra_data:
+        return "gambitlabs"
+    elif "bobthebuilder" in extra_data:
+        return "bobthebuilder"
+    elif "nfactorial" in extra_data:
+        return "nfactorial"
     elif "linux" in extra_data or "nethermind" in extra_data:
         return "vanilla_builders"
     else:
@@ -104,23 +77,27 @@ def map_extra_data_to_builder(extra_data):
     
 
 # finds the block builder given block number
-def get_block_builder(w3, block_number, block_to_builder): 
-    # first check if a known builder addr is the fee_recipient 
-    builder = get_block_builder_from_fee_recipient(block_number, block_to_builder) 
+def get_block_builder(w3, block_number): 
+    # # first check if a known builder addr is the fee_recipient 
+    # builder = get_block_builder_from_fee_recipient(block_number, block_to_builder) 
 
-    # if not fee_recipient is not a known builder, check extradata for further info
-    # occassionally, fee_recipient is set as the validator even tho the block is built by an external known builder
-    if builder.startswith("builderUnknown"):
-        # query for extraData of block using Infura endpoint
-        extra_data = str(w3.eth.get_block(int(block_number)).extraData).lower()
-        builder = map_extra_data_to_builder(extra_data)
-
+    # # if not fee_recipient is not a known builder, check extradata for further info
+    # # occassionally, fee_recipient is set as the validator even tho the block is built by an external known builder
+    # if builder.startswith("builderUnknown"):
+    #     # query for extraData of block using Infura endpoint
+    #     extra_data = str(w3.eth.get_block(int(block_number)).extraData).lower()
+    #     builder = map_extra_data_to_builder(extra_data)
+    extra_data = str(w3.eth.get_block(int(block_number)).extraData).lower()
+    builder = map_extra_data_to_builder(extra_data)
+    if builder == "b''":
+        # if no extraData, use feeRecipient as builder name
+        builder = str(w3.eth.get_block(int(block_number)).miner).lower()
     return builder
 
 # process all the possible searcher addrs in one block by parsing thru the txs
-def count_addrs_in_one_block(session, w3, url, block_number, block_to_builder):
+def count_addrs_in_one_block(session, w3, url, block_number):
     global common_addrs
-    builder = get_block_builder(w3, block_number, block_to_builder)
+    builder = get_block_builder(w3, block_number)
 
     payload = {
         'block_number': block_number,
@@ -157,7 +134,7 @@ def clean_up_swaps():
 
 # iterate through all the blocks to create a frequency mapping between builders and searchers 
 # use thread pool to expediate process
-def count_addrs(block_to_builder, blocks):
+def count_addrs(start_block, num_blocks):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
     my_provider = Web3.HTTPProvider(secret_keys.INFURA)
@@ -169,7 +146,7 @@ def count_addrs(block_to_builder, blocks):
         print("starting to go thru blocks")
         with ThreadPoolExecutor(max_workers=10) as executor:
             # Use the executor to submit the tasks
-            futures = [executor.submit(count_addrs_in_one_block, session, w3, zeromev_url, b, block_to_builder) for b in blocks]
+            futures = [executor.submit(count_addrs_in_one_block, session, w3, zeromev_url, b) for b in range(start_block, start_block + num_blocks)]
             for future in as_completed(futures):
                 pass
         print("finished counting in", time.time() - start, " seconds")
@@ -182,8 +159,11 @@ def count_addrs(block_to_builder, blocks):
     with open(constants.BUILDER_SWAPPER_MAP_FILE, 'w') as fp: 
         json.dump(swap_searchers, fp)
 
+if __name__ == "__main__":
+    # starting on 2023-07-25 21:50:37 with 24hr worth of blocks
+    start_block = 17722590
+    num_blocks = 7200 * 7 
+    count_addrs(start_block, num_blocks)
 
-block_to_builder, blocks = load_block_to_builder()
-count_addrs(block_to_builder, blocks)
 
 
