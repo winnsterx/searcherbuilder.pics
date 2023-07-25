@@ -21,12 +21,12 @@ import secret_keys
 
 # global variable that maps builder to searchers
 common_addrs = defaultdict(lambda: defaultdict(int))
+swap_addrs = defaultdict(lambda: defaultdict(int))
 
 # loads the block to builder mapping from json-file into block_to_builder dictionary
 # returns {block: builder} and [blocks]
 def load_block_to_builder():
-    jsonfile = "block_to_builder.json"
-    with open(jsonfile) as file:
+    with open(constants.BLOCK_BUILDER_MAP_FILE) as file:
         block_to_builder = json.load(file) 
         blocks = block_to_builder.keys()
         return block_to_builder, list(blocks)
@@ -74,12 +74,14 @@ def get_block_builder_from_fee_recipient(block_number, block_to_builder):
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known dapp contract 
-def incrementBotCount(builder, addr_to):
+def incrementBotCount(builder, addr_to, mev_type, block_number):
     global common_addrs
-
+    global swap_addrs
     if addr_to not in constants.COMMON_CONTRACTS:  
-        common_addrs[builder][addr_to] += 1
-
+        if mev_type != "swap":
+            common_addrs[builder][addr_to] += 1
+        else:
+            swap_addrs[builder][addr_to] += 1
 
 # maps the extradata to builder 
 def map_extra_data_to_builder(extra_data):
@@ -125,14 +127,12 @@ def count_addrs_in_one_block(session, w3, url, block_number, block_to_builder):
         "count": "1"
     }
     res = session.get(url, params=payload)
-    # print(builder, block_number)
 
     if res.status_code == 200:
         data = res.json()
         for tx in data:
-            # addr_to = tx['address_from'].lower()
             addr_to = tx['address_to'].lower()
-            incrementBotCount(builder, addr_to)
+            incrementBotCount(builder, addr_to, tx['mev_type'], block_number)
     else: 
         print("error w requesting zeromev:", res.status_code)
 
@@ -146,6 +146,14 @@ def clean_up_builder_searcher():
     filter_out_builders_with_nothing = {builder: searchers for builder, searchers in filter_out_searchers_seen_less_than_thrice.items() if searchers}
     ordered_addrs = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)) for k, v in filter_out_builders_with_nothing.items()}
     return ordered_addrs
+
+def clean_up_swaps():
+    global swap_addrs
+    filter_out_searchers_seen_less_than_thrice = {outer_k: {inner_k: v for inner_k, v in outer_v.items() if v > 4} for outer_k, outer_v in swap_addrs.items()}
+    filter_out_builders_with_nothing = {builder: searchers for builder, searchers in filter_out_searchers_seen_less_than_thrice.items() if searchers}
+    ordered_addrs = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)) for k, v in filter_out_builders_with_nothing.items()}
+    return ordered_addrs
+
 
 # iterate through all the blocks to create a frequency mapping between builders and searchers 
 # use thread pool to expediate process
@@ -167,9 +175,12 @@ def count_addrs(block_to_builder, blocks):
         print("finished counting in", time.time() - start, " seconds")
 
     builder_searchers = clean_up_builder_searcher()
+    swap_searchers = clean_up_swaps()
 
-    with open('result.json', 'w') as fp: 
+    with open(constants.BUILDER_SEARCHER_MAP_FILE, 'w') as fp: 
         json.dump(builder_searchers, fp)
+    with open(constants.BUILDER_SWAPPER_MAP_FILE, 'w') as fp: 
+        json.dump(swap_searchers, fp)
 
 
 block_to_builder, blocks = load_block_to_builder()
