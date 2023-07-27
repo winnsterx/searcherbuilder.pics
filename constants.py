@@ -30,15 +30,17 @@ JARED_CONTRACT = "0x6b75d8af000000e20b7a7ddf000ba900b4009a80"
 
 
 # Common contracts that ppl interact with
-UNISWAP_ROUTER = "0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b"
+# huge help from https://dune.com/queries/2614931/4346999
+UNISWAP_ROUTER_OLD = "0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b"
+UNISWAP_ROUTER_UNIVERSAL = "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad"
 UNISWAP_ROUTER_2 = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"
 UNISWAP_ROUTER_3 = "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45"
-UNISWAP_ROUTER_4 = "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad"
-UNISWAP_ROUTER_5 = "0xe592427a0aece92de3edee1f18e0157c05861564"
-UNISWAP_ROUTER_6 = "0x2ec705d306b51e486b1bc0d6ebee708e0661add1"
-UNISWAP_ROUTER_7 = "0x1a8f43e01b78979eb4ef7febec60f32c9a72f58e"
-UNISWAP_ROUTER_8 = "0x1e071380e7d0d6e16e0e6a2a8c990b45b13c8f90"
-UNISWAP_ROUTER_9 = "0x3999d2c5207c06bbc5cf8a6bea52966cabb76d41"
+UNISWAP_ROUTER_4 = "0xe592427a0aece92de3edee1f18e0157c05861564"
+UNISWAP_ROUTER_5 = "0x2ec705d306b51e486b1bc0d6ebee708e0661add1"
+UNISWAP_ROUTER_6 = "0x1a8f43e01b78979eb4ef7febec60f32c9a72f58e"
+UNISWAP_ROUTER_7 = "0x1e071380e7d0d6e16e0e6a2a8c990b45b13c8f90"
+UNISWAP_ROUTER_8 = "0x7e0905d9ca2d1a8f654402eb3a2409a9d7a6992e"
+UNISWAP_ROUTER_9 = "0xdb67ad20e4a131ccea0b4e560ef8cd7ab266905b"
 COINBASE_PROXY = "0xe66b31678d6c16e9ebf358268a790b763c133750"
 METAMASK_ROUTER = "0x881d40237659c251811cec9c364ef91dc08d300c"
 ONE_INCH = "0x1111111254eeb25477b68fb85ed929f73a960582"
@@ -55,14 +57,26 @@ SHIBA_INU = "0x03f7724180aa6b939894b5ca4314783b0b36b329"
 COW_SWAP = "0x9008d19f58aabd9ed0d60971565aa8510560ab41"
 PARASWAP = "0xdef171fe48cf0115b1d80b88dc8eab59176fee57"
 SUSHI_ROUTER = "0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f"
+SUSHI_ROUTER_2 = "0x827179dd56d07a7eea32e3873493835da2866976"
+SUSHI_ROUTER_3 = "0x827179dd56d07a7eea32e3873493835da2866976"
 TOKENION = "0x03f34be1bf910116595db1b11e9d1b2ca5d59659"
 DODO_ROUTER = "0x50f9bde1c76bba997a5d6e7fefff695ec8536194"
+BANANAGUN = "0xdc13700db7f7cda382e10dba643574abded4fd5b"
+BANANAGUN_2 = "0xcb31a3d26a8e346fd0e6c8cf0dbb4b9e775f1a92"
+MATCHA_ROUTER = "0x1291c02d288de3de7dc25353459489073d11e1ae"
+BITKEEP = "0xd1ca1f4dbb645710f5d5a9917aa984a47524f49a"
+BITKEEP_2 = "0x91c8d7e4080bed28e26fce1b87caccfaf7bbf794"
+CURVEFI = "0x99a58482bd75cbab83b27ec03ca68ff489b5788f"
+OPENOCEAN = "0x6352a56caadc4f1e25cd6c75970fa768a3304e64"
+RAINBOW = "0x00000000009726632680fb29d3f7a9734e3010e2"
+UNIBOT_TELEGRAM = "0x3999d2c5207c06bbc5cf8a6bea52966cabb76d41"
+CROCSWAP = "0xaaaaaaaaa24eeeb8d57d431224f73832bc34f688"
 
 
 COMMON_CONTRACTS = {
-    UNISWAP_ROUTER,
+    UNISWAP_ROUTER_OLD,
+    UNISWAP_ROUTER_UNIVERSAL,
     UNISWAP_ROUTER_2,
-    METAMASK_ROUTER,
     UNISWAP_ROUTER_3,
     UNISWAP_ROUTER_4,
     UNISWAP_ROUTER_5,
@@ -70,6 +84,7 @@ COMMON_CONTRACTS = {
     UNISWAP_ROUTER_7,
     UNISWAP_ROUTER_8,
     UNISWAP_ROUTER_9,
+    METAMASK_ROUTER,
     SHIBA_INU,
     COINBASE_PROXY,
     ONE_INCH,
@@ -85,7 +100,42 @@ COMMON_CONTRACTS = {
     COW_SWAP,
     PARASWAP,
     SUSHI_ROUTER,
-    DODO_ROUTER
+    SUSHI_ROUTER_2,
+    SUSHI_ROUTER_3,
+    DODO_ROUTER,
+    BANANAGUN,
+    BANANAGUN_2,
+    MATCHA_ROUTER,
+    BITKEEP,
+    BITKEEP_2,
+    CURVEFI,
+    OPENOCEAN,
+    RAINBOW,
+    UNIBOT_TELEGRAM,
+    CROCSWAP
+}
+
+extraData_mapping = {
+    "beaverbuild": "beaverbuild",
+    "builder0x69": "builder0x69",
+    "rsync": "rsync",
+    "blocknative": "blocknative",
+    "titan": "titan",
+    "bloxroute": "bloxroute",
+    "illuminate": "flashbots",
+    "buildai": "buildai",
+    "f1b": "f1b",
+    "eden": "eden",
+    "eth-builder": "ethbuilder",
+    "ethbuilder": "ethbuilder",
+    "boba": "boba",
+    "lightspeedbuilder": "lightspeedbuilder",
+    "payload.de": "payload",
+    "gambit": "gambitlabs",
+    "bobthebuilder": "bobthebuilder",
+    "nfactorial": "nfactorial",
+    "linux": "vanilla_builders",
+    "nethermind": "vanilla_builders"
 }
 
 BLOCK_BUILDER_MAP_FILE = "block_to_builder.json"
