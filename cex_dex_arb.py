@@ -14,7 +14,7 @@ END_BLOCK = 17666420
 PRICE_DIFFERENTIAL_THRESHOLD = 1.2
 
 def calculate_cex_dex_delta(token_a, token_b, block_number):
-
+# use this api to get internal tx https://docs.alchemy.com/reference/alchemy-getassettransfers
 
 # swap_txs = [{}]
 # def analyze_block(block_number, swap_txs):

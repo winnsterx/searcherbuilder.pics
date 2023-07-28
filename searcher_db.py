@@ -111,8 +111,8 @@ def count_addrs(start_block, num_blocks, prefetched_blocks):
 
 if __name__ == "__main__":
     # 17563790 to 17779790
-    start_block = 17729390
-    num_blocks = 7200 * 7
+    start_block = 17788280
+    num_blocks = 7200 
     prefetched_blocks = analysis.load_dict_from_json("month_blocks_info.json")
     count_addrs(start_block, num_blocks, prefetched_blocks)
 
