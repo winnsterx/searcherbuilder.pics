@@ -41,8 +41,8 @@ zeromev_builder_searcher_map = load_dict_from_json("week_builder_searcher_map.js
 zeromev_builder_swapper_map = load_dict_from_json("week_builder_swapper_map.json")
 zeromev_searchers = aggregate_searchers(zeromev_builder_searcher_map)
 zeromev_swappers = aggregate_searchers(zeromev_builder_swapper_map)
-dump_dict_to_json(zeromev_searchers, "zeromev_searchers.json")
-dump_dict_to_json(zeromev_swappers, "zeromev_swappers.json")
+dump_dict_to_json(zeromev_searchers, "week_zeromev_searchers.json")
+dump_dict_to_json(zeromev_swappers, "week_zeromev_swappers.json")
 
 # etherscan_searchers = load_dict_from_json("searcher_dbs/etherscan_searchers.json")
 # joint = find_joint_between_two_searcher_db(zeromev_searchers, etherscan_searchers)
