@@ -1,6 +1,5 @@
 import json
 import collections
-import constants
 
 def load_dict_from_json(filename):
     with open(filename) as file:
