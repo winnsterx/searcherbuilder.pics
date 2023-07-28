@@ -60,7 +60,7 @@ def batch_request(url, batch, retries, prefetched_blocks, missing_blocks):
 
 
 def get_blocks(start_block, num_blocks, missing_blocks):
-    batch_size = 99
+    batch_size = 500
     end_block = start_block + num_blocks - 1
     prefetched_blocks = {}
     
@@ -87,11 +87,10 @@ def count_blocks(blocks, start_block):
     print("all blocks are in order and present, ending at", block_num - 1)
     return True
 
-
 if __name__ == "__main__":
     # 17563790 to 17779790
     start_block = 17794300
-    num_blocks = 7200 * 2
+    num_blocks = 1000
     missing_blocks = {}
     prefetched_blocks = get_blocks(start_block, num_blocks, missing_blocks)
     # prefetched_blocks = analysis.load_dict_from_json("tri_month_blocks.json")
