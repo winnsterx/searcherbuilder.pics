@@ -4,6 +4,7 @@ import analysis, secret_keys
 MAX_RETRIES = 5  # Define a maximum number of retries
 INITIAL_BACKOFF = 1  # Define initial backoff time in seconds
 
+# Simplify a block by keeping only relevant fields
 def simplify_block(block):
     simplified = {
         "hash": block["hash"],
@@ -21,38 +22,36 @@ def simplify_block(block):
                 "maxPriorityFeePerGas": int(tx.get("maxPriorityFeePerGas", "0x0"), 16),
                 "value": int(tx["value"], 16)
             }
-            for i, tx in enumerate(block["transactions"])
+            for _, tx in enumerate(block["transactions"])
         ]
     }
     return simplified 
 
 
-def process_response(response, retries, blocks_fetched, batch):
-    retry_required = False
+# Simplify block fetched and handle errorneous responses 
+def process_batch_response(response, blocks_fetched):
+    success = True
     try:
-        bs = response.json()  # [{}, {}]
-        for b in bs:
-            if 'result' in b and b['result'] is None:
-                print(f"block {b['id']} is missing with {b}")
-                retry_required = True
-                return retry_required
-            elif "error" in b:
-                print(f"block {b['id']} is getting error msg of {b}")
-                retry_required = True
-                return retry_required
+        blocks = response.json()  # [{}, {}]
+        for b in blocks:
+            if ('result' in b and b['result'] is None) or "error" in b:
+                print(f"block {b['id']} cannot be fetched: {b}")
+                success = False
+                # immediately stop processing this batch of response bc whole batch may be bad
+                return success
             else:
-                # extraData = bytes.fromhex(b["result"]["extraData"].lstrip("0x")).decode("ISO-8859-1")
-                # miner = b["result"]["miner"]
-                # blocks_fetched[block_number] = {"extraData": extraData, "feeRecipient": miner}
                 block_number = b["id"]
                 full_block = b["result"]
                 blocks_fetched[block_number] = simplify_block(full_block)
-        return retry_required
+        return success
 
     except Exception as e:
         print("Exception occurred", e)
         analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json") 
 
+
+# Sends batch requests of 1000 to node 
+# Uses exponential retries when errors are encountered 
 def batch_request(url, batch, retries, blocks_fetched):
     headers = {"Content-Type": "application/json"}
 
@@ -62,21 +61,22 @@ def batch_request(url, batch, retries, blocks_fetched):
         response = requests.post(url, headers=headers, data=json.dumps(batch))
 
         if response.status_code == 200:
-            retry_required = process_response(response, retries, blocks_fetched, batch)
-            if not retry_required: # if retry is not required, process is complete'
-                print("batch successfully completed")
+            success = process_batch_response(response, blocks_fetched)
+            if success: # if retry is not required, process is complete'
+                print("Batch successfully fetched & processed")
                 break
         else: 
             print(f"Non-success status code received: {response.status_code}, retrying for the {retries + 1} time")
 
-        analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
         retries += 1
         time.sleep(INITIAL_BACKOFF * (2 ** retries))  # Sleep before next retry with exponential backoff        
         
         if retries == MAX_RETRIES:
+            analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json") 
             print("Max retries reached. Exiting.")
 
 
+# Get all blocks in batch requests of 1000 
 def get_blocks(start_block, num_blocks):
     batch_size = 1000
     end_block = start_block + num_blocks - 1
@@ -91,11 +91,10 @@ def get_blocks(start_block, num_blocks):
         batch_request(secret_keys.ALCHEMY, batch, 0, blocks_fetched)
     
     print("finished getting blocks in", time.time() - start, " seconds")
-    analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
     return blocks_fetched
     
 
-# counts that the blocks in block file is in order and present
+# Counts that the blocks in block file is in order and present
 def count_blocks(blocks, start_block):
     block_num = start_block
     for b, _ in blocks.items():
@@ -106,14 +105,16 @@ def count_blocks(blocks, start_block):
     print("all blocks are in order and present, ending at", block_num - 1)
     return True
 
+
 if __name__ == "__main__":
-    start_block = 17794300
-    num_blocks = 10
+    start_block = 17563790
+    num_blocks = 7200 * 7
+
     blocks_fetched = get_blocks(start_block, num_blocks)
-    # blocks_fetched = analysis.load_dict_from_json("tri_month_blocks.json")
-    correct_block_count = count_blocks(blocks_fetched, start_block)
-    # so i can take a quick look 
     analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
+
+    count_blocks(blocks_fetched, start_block)
+
 
 
 
