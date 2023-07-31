@@ -77,8 +77,8 @@ def count_addrs_in_one_block(session, url, prefetched_blocks, block_number):
 # filters out all bots that have interacted with a builder less than five times
 # filters out all builders w no bots after first filter
 # orders bots by their number of txs in each builder
-def clean_up(data):
-    filtered_searchers = {outer_k: {inner_k: v for inner_k, v in outer_v.items() if v > 4} for outer_k, outer_v in data.items()}
+def clean_up(data, threshold):
+    filtered_searchers = {outer_k: {inner_k: v for inner_k, v in outer_v.items() if v >= threshold} for outer_k, outer_v in data.items()}
     filtered_builders = {builder: searchers for builder, searchers in filtered_searchers.items() if searchers}
     ordered_addrs = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)) for k, v in filtered_builders.items()}
     return ordered_addrs
@@ -101,8 +101,8 @@ def count_addrs(start_block, num_blocks, prefetched_blocks):
                 pass
         print("finished counting in", time.time() - start, " seconds")
 
-    atomic_builder_searchers = clean_up(atomic_addrs)
-    swap_builder_searchers = clean_up(swap_addrs)
+    atomic_builder_searchers = clean_up(atomic_addrs, 5)
+    swap_builder_searchers = clean_up(swap_addrs, 5)
 
     with open(constants.BUILDER_SEARCHER_MAP_FILE, 'w') as fp: 
         json.dump(atomic_builder_searchers, fp)

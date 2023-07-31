@@ -4,6 +4,26 @@ import analysis, secret_keys
 MAX_RETRIES = 5  # Define a maximum number of retries
 INITIAL_BACKOFF = 1  # Define initial backoff time in seconds
 
+def simplify_block(block):
+    simplified = {
+        "hash": block["hash"],
+        "transactions": [
+            {
+                "transactionIndex": int(tx["transactionIndex"], 16),
+                "hash": tx["hash"],
+                "from": tx["from"],
+                "to": tx.get("to", "0x0"),
+                "gas": int(tx["gas"], 16),
+                "gasPrice": int(tx.get("gasPrice", "0x0"), 16),
+                "maxFeePerGas": int(tx.get("maxFeePerGas", "0x0"), 16),
+                "maxPriorityFeePerGas": int(tx.get("maxPriorityFeePerGas", "0x0"), 16),
+                "value": int(tx["value"], 16)
+            }
+            for i, tx in enumerate(block["transactions"])
+        ]
+    }
+    return simplified 
+
 def process_response(response, retries, prefetched_blocks, missing_blocks, batch):
     retry_required = False
     try:
@@ -23,10 +43,13 @@ def process_response(response, retries, prefetched_blocks, missing_blocks, batch
                 retry_required = True
                 return retry_required
             else:
-                extraData = bytes.fromhex(b["result"]["extraData"].lstrip("0x")).decode("ISO-8859-1")
-                miner = b["result"]["miner"]
+                # extraData = bytes.fromhex(b["result"]["extraData"].lstrip("0x")).decode("ISO-8859-1")
+                # miner = b["result"]["miner"]
                 block_number = b["id"]
-                prefetched_blocks[block_number] = {"extraData": extraData, "feeRecipient": miner}
+                full_block = b["result"]
+                # prefetched_blocks[block_number] = {"extraData": extraData, "feeRecipient": miner}
+
+                prefetched_blocks[block_number] = simplify_block(full_block)
         return retry_required
 
     except Exception as e:
@@ -90,7 +113,7 @@ def count_blocks(blocks, start_block):
 if __name__ == "__main__":
     # 17563790 to 17779790
     start_block = 17794300
-    num_blocks = 1000
+    num_blocks = 10
     missing_blocks = {}
     prefetched_blocks = get_blocks(start_block, num_blocks, missing_blocks)
     # prefetched_blocks = analysis.load_dict_from_json("tri_month_blocks.json")
