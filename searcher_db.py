@@ -28,7 +28,7 @@ def incrementBotCount(builder, addr_to, mev_type):
 # maps the extradata to builder 
 def map_extra_data_to_builder(extra_data):
     for key in constants.extraData_mapping:
-        if key in extra_data:
+        if key in extra_data.lower():
             return constants.extraData_mapping[key]
     # If no matches, return the original data
     return extra_data
@@ -39,15 +39,12 @@ def map_extra_data_to_builder(extra_data):
 def get_block_builder(block_number, prefetched_blocks): 
     block = prefetched_blocks[str(block_number)]
     extra_data = block["extraData"]
-    builder = map_extra_data_to_builder(extra_data.lower())
+    builder = map_extra_data_to_builder(extra_data)
     if builder == "":
         # if no extraData, use feeRecipient addr as builder name
         builder = block["feeRecipient"]
     return builder
 
-# def is_cex_dex_arb(tx):
-#     # a swap tx
-#     return True
 
 # processes addr_tos of all MEV txs in a block
 def count_addrs_in_one_block(session, url, prefetched_blocks, block_number):

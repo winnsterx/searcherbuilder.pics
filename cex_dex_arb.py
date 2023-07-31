@@ -9,6 +9,7 @@ import requests
 import json
 from collections import defaultdict
 import searcher_db
+import fetch_blocks
 import analysis
 import constants
 
@@ -61,25 +62,34 @@ def calculate_block_median_gas_price(transactions):
         return (gas_prices[mid - 1] + gas_prices[mid]) / 2
     else:
         return gas_prices[mid]
-    
 
 
-def analyze_blocks():
+def get_above_median_txs_in_block(block_number, block, builder_swapper_map):
+    extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
+    builder = searcher_db.map_extra_data_to_builder(extra_data)
+    swap_txs = get_swaps(block_number)
+    median_gas_price = calculate_block_median_gas_price(block["transactions"])
+    print(median_gas_price)
+    for swap in swap_txs:
+        tx = block["transactions"][swap['tx_index']]
+        if tx["gasPrice"] > median_gas_price:
+            builder_swapper_map[builder][tx["to"]] += 1
+        
+
+def analyze_blocks(blocks):
     builder_swapper_map = defaultdict(lambda: defaultdict(int))
-    blocks = analysis.load_dict_from_json("blocks_info.json")
-    builder = "builder6"
     for block_number, block in blocks.items():
-        swap_txs = get_swaps(block_number)
-        median_gas_price = calculate_block_median_gas_price(block["transactions"])
-        print(median_gas_price)
-        for swap in swap_txs:
-            tx = block["transactions"][swap['tx_index']]
-            if tx["gasPrice"] > median_gas_price:
-                builder_swapper_map[builder][tx["to"]] += 1
+        get_above_median_txs_in_block(block_number, block, builder_swapper_map)
     return builder_swapper_map
 
 
 if __name__ == "__main__":
-    builder_swapper_map = analyze_blocks()
+    start_block = 17563790
+    num_blocks = 30
+    blocks_fetched = fetch_blocks.get_blocks(start_block, num_blocks) 
+    analysis.dump_dict_to_json(blocks_fetched, "all_blocks.json")
+    # blocks_fetched = analysis.load_dict_from_json("blocks_info.json")
+
+    builder_swapper_map = analyze_blocks(blocks_fetched)
     ordered = searcher_db.clean_up(builder_swapper_map, 2)
     analysis.dump_dict_to_json(ordered, "builder_cex_map.json")
