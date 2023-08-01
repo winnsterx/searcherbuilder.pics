@@ -1,4 +1,4 @@
-import requests, json, time
+import requests, json, time, ijson
 import analysis, secret_keys
 
 MAX_RETRIES = 5  # Define a maximum number of retries
@@ -106,14 +106,39 @@ def count_blocks(blocks, start_block):
     return True
 
 
+def merge_large_json_files(file_list, output_file):
+    with open(output_file, 'w') as outfile:
+        outfile.write('{')  # start of json
+
+        # flag to keep track if we need to write a comma
+        write_comma = False
+
+        for file in file_list:
+            with open(file, 'rb') as infile:
+                # process file
+                objects = ijson.kvitems(infile, '')
+                for key, value in objects:
+                    # if not first object, add a comma
+                    if write_comma:  
+                        outfile.write(',')
+                    outfile.write(json.dumps(key) + ':' + json.dumps(value))  # add block_number: block_detail pair
+                    write_comma = True
+
+        outfile.write('}')  # end of json
+
+
 if __name__ == "__main__":
-    start_block = 17563790
-    num_blocks = 7200 * 7
+    start_block = 17765390
+    num_blocks = 7200 * 2 + 1
 
-    blocks_fetched = get_blocks(start_block, num_blocks)
-    analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
+    # blocks_fetched = get_blocks(start_block, num_blocks)
+    # analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
 
-    count_blocks(blocks_fetched, start_block)
+    # files = ['blocks_1.json', 'blocks_2.json', 'blocks_3.json']  # add more file names if needed
+    # merge_large_json_files(files, 'merged.json')
+    
+    
+
 
 
 
