@@ -129,14 +129,18 @@ def merge_large_json_files(file_list, output_file):
 
 if __name__ == "__main__":
     start_block = 17765390
-    num_blocks = 7200 * 2 + 1
+    num_blocks = 1
 
-    # blocks_fetched = get_blocks(start_block, num_blocks)
-    # analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
-
-    # files = ['blocks_1.json', 'blocks_2.json', 'blocks_3.json']  # add more file names if needed
-    # merge_large_json_files(files, 'merged.json')
-    
+    start = time.time()
+    print("Loading blocks")
+    blocks = analysis.load_dict_from_json("test_blocks.json")
+    done_loading = time.time()
+    print("Blocks took x seconds to load", done_loading - start)
+    count_blocks(blocks, start_block=17563790)
+    done_counting = time.time()
+    print("Block took x to count", done_counting - done_loading)
+    print(blocks["17563790"])
+    print("block to x to retrieve after loading:", time.time() - done_counting)
     
 
 

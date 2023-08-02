@@ -1,0 +1,9 @@
+{
+  "uncertain": {
+    "0x307f73EE7f185208B994775847A1A940Bafa4bC1": "doesnt hold any tokens in contract",
+    "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": "trading shitcoins that are not listed on cex"
+  },
+  "some_certain": {
+    "0x30ea35bf5dbe2b80fc2438418848a53a0b194e3b": "doing arbitrage"
+  }
+}

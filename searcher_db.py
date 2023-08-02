@@ -62,10 +62,7 @@ def count_addrs_in_one_block(session, url, prefetched_blocks, block_number):
             for tx in data:
                 addr_to = tx['address_to'].lower()
                 incrementBotCount(builder, addr_to, tx['mev_type'])
-            
-                # if tx['mev_type'] == "swap":
-                #     is_cex_dex = is_cex_dex_arb(tx)
-                    
+                                
         else: 
             print("error w requesting zeromev:", res.status_code)
     except Exception as e:
@@ -106,6 +103,7 @@ def count_addrs(start_block, num_blocks, prefetched_blocks):
         json.dump(atomic_builder_searchers, fp)
     with open(constants.BUILDER_SWAPPER_MAP_FILE, 'w') as fp: 
         json.dump(swap_builder_searchers, fp)
+
 
 if __name__ == "__main__":
     # 17563790 to 17779790
