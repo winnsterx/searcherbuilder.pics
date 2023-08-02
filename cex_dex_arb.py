@@ -14,6 +14,7 @@ import fetch_blocks
 import analysis
 import constants
 import secret_keys
+import time
 
 START_BLOCK = 17616021
 END_BLOCK = 17666420
@@ -69,6 +70,7 @@ def simplify_transfers(transfers):
     return simplified
 
 
+# block_number: string, builder: string
 def get_internal_transfers_in_block(block_number, builder):
     headers = { "accept": "application/json", "content-type": "application/json" }
     payload = {
@@ -79,8 +81,8 @@ def get_internal_transfers_in_block(block_number, builder):
             {
                 "category": ["internal"],
                 "toAddress": builder, 
-                "fromBlock": hex(block_number),
-                "toBlock": hex(block_number)
+                "fromBlock": hex(int(block_number)),
+                "toBlock": hex(int(block_number))
             }
         ]
     }
@@ -112,8 +114,8 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
     transfer_list, transfer_set = get_internal_transfers_in_block(block_number, fee_recipient)
 
     swap_txs = get_swaps(block_number)
+
     median_gas_price = calculate_block_median_gas_price(block["transactions"])
-    print(median_gas_price)
 
     # only consider txs labeled as swap by zeromev
     for swap in swap_txs:
@@ -159,10 +161,15 @@ if __name__ == "__main__":
     # start_block = 17563790
     # num_blocks = 10
     # blocks_fetched = fetch_blocks.get_blocks(start_block, num_blocks)
-
+    start = time.time()
+    print("Starting to load block from json", start)
     blocks_fetched = analysis.load_dict_from_json("block_data/blocks_1.json")
-    
+
+    pre_analysis = time.time()
+    print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
     builder_swapper_map, coinbase_bribe, gas_fee_bribe_1, gas_fee_bribe_10 = analyze_blocks(blocks_fetched)
+    post_analysis = time.time()
+    print(f"Finished analysis in {post_analysis - pre_analysis} seconds")
     analysis.dump_dict_to_json(builder_swapper_map, "builder_cex_map.json")
 
     agg = analysis.aggregate_searchers(builder_swapper_map)
