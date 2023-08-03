@@ -36,10 +36,10 @@ def find_joint_between_two_searcher_db(db_one, db_two):
     addr_two = set(db_two.keys())
     return addr_one & addr_two
 
-def find_disjoint_between_two_searcher_db(db_one, db_two):
+def find_distinct_between_two_searcher_db(db_one, db_two):
     addr_one = set(db_one.keys())
     addr_two = set(db_two.keys())
-    return addr_one - addr_two, addr_two - addr_one
+    return addr_one - addr_two
 
 zeromev_builder_searcher_map = load_dict_from_json("week_builder_searcher_map.json")
 zeromev_builder_swapper_map = load_dict_from_json("week_builder_swapper_map.json")
