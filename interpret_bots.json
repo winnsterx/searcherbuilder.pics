@@ -1,7 +1,16 @@
 {
   "uncertain": {
     "0x307f73EE7f185208B994775847A1A940Bafa4bC1": "doesnt hold any tokens in contract",
-    "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": "trading shitcoins that are not listed on cex"
+    "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": "trading shitcoins that are not listed on cex",
+    "0x28e261390adaa654f29dbe268109baf06e9b4cc4": "cefi defi?",
+    "0xc80e5f7b6d94561c32c59e68ee67cdd2f613851c": "cefi defi",
+    "0x593ac83229d3099c57cc721540c4d535a7fbbfd6": "cefi defi",
+    "0xd249942f6d417cbfdcb792b1229353b66c790726": "cefi defi",
+    "0xbd4fecd9337d22514fdd6d7fbeb9155cf8d790b1": "cefi defi",
+    "0x6719c6ebf80d6499ca9ce170cda72beb3f1d1a54": "cefi defi",
+    "0xa5b411aaeb798d99f107932689a5eece4d72a2ec": "no clue",
+    "0x767c8bb1574bee5d4fe35e27e0003c89d43c5121": "no clue",
+    "0xa2fdc8cd719ac10cdd39e76b378743bcbd6f1dfb": "shit coins"
   },
   "some_certain": {
     "0x30ea35bf5dbe2b80fc2438418848a53a0b194e3b": "doing arbitrage"

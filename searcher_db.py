@@ -89,7 +89,7 @@ def count_addrs(start_block, num_blocks, prefetched_blocks):
         # Create a ThreadPoolExecutor
         start = time.time()
         print("starting to go thru blocks")
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [executor.submit(count_addrs_in_one_block, session, zeromev_url, prefetched_blocks, b) for b in range(start_block, start_block + num_blocks)]
             for future in as_completed(futures):
