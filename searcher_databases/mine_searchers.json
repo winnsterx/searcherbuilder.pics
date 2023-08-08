@@ -5,15 +5,23 @@
   "0x00004ec2008200e43b243a000590d4cd46360000": "sandwich",
   "0x6a8aeb3f8509c188775f65fd1e9eb5dd10abb8db": "sandwich",
   "0x0000cd00001700b10049dfc947103e00e1c62683": "sandwich",
-  "0x1fdb319cc1be16ff75ef84e408b0bc1594dd4d3c": "arbitrage",
   "0xcc2687c14915fd68226ccf388842515739a739bd": "sandwich",
   "0xfd0000000100069ad1670066004306009b487ad7": "sandwich",
   "0xa80db00007020e013fa10d0560700c0018003b8b": "sandwich",
   "0x429cf888dae41d589d57f6dc685707bec755fe63": "sandwich",
-  "0x605e35e88b2eba3ff084045d8eb8ae881c7e9dcb": "arbitrage",
   "0x00a2712e3200e89c6b8500b2da5c6c9431330000": "sandwich",
   "0x000000000015159abc7d42e8e813328b5a034c0d": "sandwich",
   "0x9507c04b10486547584c37bcbd931b2a4fee9a41": "jump_cefi",
   "0xe8cFAd4C75a5e1CaF939Fd80AfCf837DdE340a69": "cefi",
-  "0xd19dc09880685dd8cf60687d57936358582876b5": "arbitrage"
+  "arbitrage": {
+    "0x25e849e019000018d8e400bf0007000888e66000": "arbitrage",
+    "0xd19dc09880685dd8cf60687d57936358582876b5": "arbitrage",
+    "0x605e35e88b2eba3ff084045d8eb8ae881c7e9dcb": "arbitrage",
+    "0x1fdb319cc1be16ff75ef84e408b0bc1594dd4d3c": "arbitrage"
+  },
+  "non-cefidefi": {
+    "0x81153f0889ab398c4acb42cb58b565a5392bba95": 6782,
+    "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": 6407,
+    "0x1fb421310ceacd0afb2a429bbb4682e522b38ecb": 6320
+  }
 }

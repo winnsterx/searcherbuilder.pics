@@ -18,8 +18,7 @@ import time
 START_BLOCK = 17616021
 END_BLOCK = 17666420
 
-GAS_PRICE_MULTIPLIER_1 = 1.25
-GAS_PRICE_MULTIPLIER_2 = 1.5
+GAS_PRICE_MULTIPLIER = 1.5
 
 # use this api to get internal tx https://docs.alchemy.com/reference/alchemy-getassettransfers
 
@@ -87,8 +86,9 @@ def get_internal_transfers_in_block(block_number, builder):
     }
     response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
     transfers = response.json()["result"]["transfers"]
+    transfer_map = {tr['hash']: {'from': tr["from"], 'to': tr['to']} for tr in transfers}
     transfer_set = set(tr['hash'] for tr in transfers)
-    return transfer_set
+    return transfer_set, transfer_map
 
 
            
@@ -100,7 +100,7 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
     builder = searcher_db.map_extra_data_to_builder(extra_data, block["feeRecipient"])
     
     fee_recipient = block["feeRecipient"]
-    transfer_set = get_internal_transfers_in_block(block_number, fee_recipient)
+    transfer_set, transfer_map = get_internal_transfers_in_block(block_number, fee_recipient)
 
     swap_txs = get_swaps(block_number)
     median_gas_price = calculate_block_median_gas_price(block["transactions"])
@@ -110,27 +110,26 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
     # only consider txs labeled as swap by zeromev
     for swap in swap_txs:
         tx = block["transactions"][swap['tx_index']] 
-        if tx["hash"] in transfer_set: 
+        if tx["hash"] in transfer_map.keys(): 
             # bribing with coinbase transfers
-            builder_swapper_map[builder][tx["to"]] += 1
+            builder_swapper_map[builder][transfer_map[tx['hash']]["from"]] += 1
             if tx["to"] in coinbase_bribe:
-                coinbase_bribe[tx["to"]].append(tx['hash'])
+                coinbase_bribe[transfer_map[tx['hash']]["from"]].append(tx['hash'])
             else: 
-                coinbase_bribe[tx["to"]] = [tx["hash"]]
-        elif (tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER_1) and (tx["gasPrice"] < median_gas_price * GAS_PRICE_MULTIPLIER_2):
-            # bribing with gas_fee that is above median, but below median * 1.2 
-            if tx["to"] in gas_fee_bribe_lower:
-                gas_fee_bribe_lower[tx["to"]].append(tx['hash'])
-            else: 
-                gas_fee_bribe_lower[tx["to"]] = [tx["hash"]]
-        elif tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER_2:
-            # bribing w gas_fee above median * 1.25
+                coinbase_bribe[transfer_map[tx['hash']]["from"]] = [tx["hash"]]
+        elif tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER:
+            # bribing w gas_fee at least 50% above median
             builder_swapper_map[builder][tx["to"]] += 1
             if tx["to"] in gas_fee_bribe_higher:
                 gas_fee_bribe_higher[tx["to"]].append(tx['hash'])
             else: 
                 gas_fee_bribe_higher[tx["to"]] = [tx["hash"]]
-
+        # elif (tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER_1) and (tx["gasPrice"] < median_gas_price * GAS_PRICE_MULTIPLIER_2):
+        #     # bribing with gas_fee that is above median, but below median * 1.2 
+        #     if tx["to"] in gas_fee_bribe_lower:
+        #         gas_fee_bribe_lower[tx["to"]].append(tx['hash'])
+        #     else: 
+        #         gas_fee_bribe_lower[tx["to"]] = [tx["hash"]]
 
 
 def analyze_blocks(blocks):
