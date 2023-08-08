@@ -14,11 +14,7 @@ swap_addrs = defaultdict(lambda: defaultdict(int))
 # contract is ignored if it is a known router, dex, etc
 def incrementBotCount(builder, addr_to, mev_type):
     global atomic_addrs
-    global swap_addrs
-    if mev_type == "swap" and addr_to not in constants.COMMON_CONTRACTS:  
-
-        swap_addrs[builder][addr_to] += 1
-    elif mev_type == "sandwich":
+    if mev_type == "swap" or mev_type == "sandwich":
         return
     elif addr_to not in constants.COMMON_CONTRACTS: 
         # if tx is neither swap nor sandwich, it must be frontrun, backrun, liquidation, arb 
@@ -48,15 +44,17 @@ def get_block_builder(block_number, prefetched_blocks):
 
 
 # processes addr_tos of all MEV txs in a block
-def count_addrs_in_one_block(session, url, prefetched_blocks, block_number):
+def count_addrs_in_one_block(session, url, block_number, block):
     try: 
         global atomic_addrs
-        builder = get_block_builder(block_number, prefetched_blocks)
+        extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
+        builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
         payload = {
             'block_number': block_number,
             "count": "1"
         }
         res = session.get(url, params=payload)
+        print(block_number)
         if res.status_code == 200:
             data = res.json()
             for tx in data:
@@ -81,7 +79,7 @@ def clean_up(data, threshold):
 
 # iterate through all the blocks to create a frequency mapping between builders and searchers 
 # use thread pool to expediate process
-def count_addrs(start_block, num_blocks, prefetched_blocks):
+def count_addrs(prefetched_blocks):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
 
@@ -91,26 +89,37 @@ def count_addrs(start_block, num_blocks, prefetched_blocks):
         print("starting to go thru blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
-            futures = [executor.submit(count_addrs_in_one_block, session, zeromev_url, prefetched_blocks, b) for b in range(start_block, start_block + num_blocks)]
+            futures = [executor.submit(count_addrs_in_one_block, session, zeromev_url, block_number, block) for block_number, block in prefetched_blocks.items()]
             for future in as_completed(futures):
                 pass
         print("finished counting in", time.time() - start, " seconds")
 
-    atomic_builder_searchers = clean_up(atomic_addrs, 5)
-    swap_builder_searchers = clean_up(swap_addrs, 5)
+    return atomic_addrs
 
-    with open(constants.BUILDER_SEARCHER_MAP_FILE, 'w') as fp: 
-        json.dump(atomic_builder_searchers, fp)
-    with open(constants.BUILDER_SWAPPER_MAP_FILE, 'w') as fp: 
-        json.dump(swap_builder_searchers, fp)
+def compile_atomic_data(builder_atomic_map):
+    # not trimming anything, will do processing later
+    analysis.dump_dict_to_json(builder_atomic_map, "atomic/builder_atomic_map.json")
+    agg = analysis.aggregate_searchers(builder_atomic_map)
+    analysis.dump_dict_to_json(agg, "atomic/atomic_searchers_agg.json")
+
 
 
 if __name__ == "__main__":
     # 17563790 to 17779790
-    start_block = 17788280
-    num_blocks = 7200 
-    prefetched_blocks = analysis.load_dict_from_json("month_blocks_info.json")
-    count_addrs(start_block, num_blocks, prefetched_blocks)
+    start = time.time()
+    print(f"Starting to load block from json at {start / 1000}")
+
+    prefetched_blocks = analysis.load_dict_from_json("block_data/all_blocks_30_days.json")
+
+    pre_analysis = time.time()
+    print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
+
+    builder_atomic_map = count_addrs(prefetched_blocks)
+    post_analysis = time.time()
+    print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
+
+    compile_atomic_data(builder_atomic_map)
+
 
 
 

@@ -153,29 +153,27 @@ def analyze_blocks(blocks):
 
 def compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, gas_fee_bribe_lower, gas_fee_bribe_higher):
     trimmed_map = searcher_db.clean_up(builder_swapper_map, 5)
-    analysis.dump_dict_to_json(trimmed_map, "bot_data/builder_cefi_map.json")
+    analysis.dump_dict_to_json(trimmed_map, "non_atomic/builder_cefi_map.json")
 
     agg = analysis.aggregate_searchers(builder_swapper_map)
     trimmed_agg = {k: v for k, v in agg.items() if v >= 5 or k in coinbase_bribe.keys()}
-    analysis.dump_dict_to_json(trimmed_agg, "bot_data/cefi_searchers_agg.json")
+    analysis.dump_dict_to_json(trimmed_agg, "non_atomic/cefi_searchers_agg.json")
 
     # bots that are only included when threshold is lower, 
     # trimmed_in_lower_only = {k: v for k, v in gas_fee_bribe_lower.items() if k not in gas_fee_bribe_higher and len(v) >= 5}
-    # analysis.dump_dict_to_json((trimmed_in_lower_only), "bot_data/cefi_bots_only_in_lower_gas.json")
-    analysis.dump_dict_to_json(gas_fee_bribe_lower, "bot_data/cefi_bots_only_in_lower_gas.json")
-    analysis.dump_dict_to_json(gas_fee_bribe_higher, "bot_data/cefi_bots_in_higher_gas.json")
-    analysis.dump_dict_to_json(coinbase_bribe, "bot_data/coinbase_bribes.json")
+    # analysis.dump_dict_to_json((trimmed_in_lower_only), "non_atomic/cefi_bots_only_in_lower_gas.json")
+    analysis.dump_dict_to_json(gas_fee_bribe_lower, "non_atomic/cefi_bots_only_in_lower_gas.json")
+    analysis.dump_dict_to_json(gas_fee_bribe_higher, "non_atomic/cefi_bots_in_higher_gas.json")
+    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/coinbase_bribes.json")
 
     # known, potential = check_mev_bots(list(in_lower_only))
-    # analysis.dump_dict_to_json(list(known), "bot_data/only_lower_gas_known.json")
-    # analysis.dump_dict_to_json(list(potential), "bot_data/only_lower_gas_potential.json")
+    # analysis.dump_dict_to_json(list(known), "non_atomic/only_lower_gas_known.json")
+    # analysis.dump_dict_to_json(list(potential), "non_atomic/only_lower_gas_potential.json")
 
 
 
 if __name__ == "__main__":
-    # start_block = 17563790
-    # num_blocks = 10
-    # blocks_fetched = fetch_blocks.get_blocks(start_block, num_blocks)
+    # 17563790 to 17779790
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
     blocks_fetched = analysis.load_dict_from_json("block_data/all_blocks_30_days.json")

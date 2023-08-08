@@ -110,44 +110,47 @@ def create_agg_from_bribes(dir):
     return {k: v for k, v in new_cefi_searcher_agg.items() if v >= 5 or k in coinbase_bribes.keys()}
 
 
-def analyse_top_ten(searchers):
+def analyse_top_x(searchers, x):
     defined_searchers = load_dict_from_json("searcher_databases/mine_searchers.json")
     non_cefidefi = defined_searchers["non-cefidefi"]
     total_tx_count = sum(searchers.values())
-    top_ten = {k: v for k, v in list(iter(searchers.items()))[:10]}
-    total_top_ten_tx_count = sum(top_ten.values())
-    cefidefi_tx_count = sum(v for k, v in top_ten.items() if k not in non_cefidefi)
-    print(f"the top ten addrs occupy {total_top_ten_tx_count / total_tx_count * 100}% of all txs")
-    print(f"cefi-defi arb addrs occupy {cefidefi_tx_count / total_top_ten_tx_count * 100}% of all top ten addrs")
-    print(f"cefi-defi arb addrs occupy {cefidefi_tx_count / total_tx_count * 100}% of all tx")
+    top_x = {k: v for k, v in list(iter(searchers.items()))[:x]}
+    total_top_ten_tx_count = sum(top_x.values())
+    cefidefi_tx_count = sum(v for k, v in top_x.items() if k not in non_cefidefi)
+    print(f"The top {x} addrs created {round(total_top_ten_tx_count / total_tx_count * 100, 2)}% of all txs")
+    print(f"Cefi-defi arbs is responsible for {round(cefidefi_tx_count / total_top_ten_tx_count * 100, 2)}% of all txs coming from the top {x} addrs")
+    print(f"Cefi-defi arbs is responsible for at least {round(cefidefi_tx_count / total_tx_count * 100, 2)}% of all txs\n") 
 
     return cefidefi_tx_count / total_top_ten_tx_count
     
 
 if __name__ == "__main__":
-    # cleaned = remove_known_addrs_from_list(load_dict_from_json("bot_data/above_50_median/cefi_searchers_agg.json"))
-    # dump_dict_to_json(cleaned, "bot_data/above_50_median/new_cefi_searchers_agg.json")
+    # cleaned = remove_known_addrs_from_list(load_dict_from_json("non_atomic/above_50_median/cefi_searchers_agg.json"))
+    # dump_dict_to_json(cleaned, "non_atomic/above_50_median/new_cefi_searchers_agg.json")
 
-    all_bots = load_dict_from_json("bot_data/above_50_median/cefi_searchers_agg.json")
-    print(analyse_top_ten(all_bots))
-    # unknown_bots = return_unknown_bots(all_bots, "bot_data/above_50_median/")
+    all_bots = load_dict_from_json("non_atomic/above_50_median/cefi_searchers_agg.json")
+    analyse_top_x(all_bots, 10)
+    analyse_top_x(all_bots, 20)
+    analyse_top_x(all_bots, 30)
 
-    # dump_dict_to_json(unknown_bots, "bot_data/above_50_median/unknown_bots.json")
+    # unknown_bots = return_unknown_bots(all_bots, "non_atomic/above_50_median/")
 
-    # agg_1 = create_agg_from_bribes("bot_data/above_median")
+    # dump_dict_to_json(unknown_bots, "non_atomic/above_50_median/unknown_bots.json")
+
+    # agg_1 = create_agg_from_bribes("non_atomic/above_median")
     # agg_1 = {k: v for k, v in sorted(agg_1.items(), key=lambda item: item[1], reverse=True)}
-    # dump_dict_to_json(agg_1, "bot_data/above_median/new_cefi_searchers_agg.json")
+    # dump_dict_to_json(agg_1, "non_atomic/above_median/new_cefi_searchers_agg.json")
 
     # # print("comparing median * 1.25 and median * 1.5")
-    # # lower = "bot_data/above_125_median/"
-    # # higher = "bot_data/above_15_median/"
+    # # lower = "non_atomic/above_125_median/"
+    # # higher = "non_atomic/above_15_median/"
     # # lower_bots = load_dict_from_json(lower + "cefi_searchers_agg.json")
     # # higher_bots = load_dict_from_json(higher + "cefi_searchers_agg.json")
     # # compare_two_thresholds(lower_bots, higher_bots, lower, higher)
 
     # print("comparing median * 1 and median * 1.25")
-    # lower = "bot_data/above_median/"
-    # higher = "bot_data/above_125_median/"
+    # lower = "non_atomic/above_median/"
+    # higher = "non_atomic/above_125_median/"
     # lower_bots = load_dict_from_json(lower + "new_cefi_searchers_agg.json")
     # higher_bots = load_dict_from_json(higher + "cefi_searchers_agg.json")
     # compare_two_thresholds(lower_bots, higher_bots, lower, higher)
