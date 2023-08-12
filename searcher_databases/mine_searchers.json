@@ -13,11 +13,13 @@
   "0x000000000015159abc7d42e8e813328b5a034c0d": "sandwich",
   "0x9507c04b10486547584c37bcbd931b2a4fee9a41": "jump_cefi",
   "0xe8cFAd4C75a5e1CaF939Fd80AfCf837DdE340a69": "cefi",
+  "0x28e261390adaa654f29dbe268109baf06e9b4cc4": "cefi",
   "arbitrage": {
     "0x25e849e019000018d8e400bf0007000888e66000": "arbitrage",
     "0xd19dc09880685dd8cf60687d57936358582876b5": "arbitrage",
     "0x605e35e88b2eba3ff084045d8eb8ae881c7e9dcb": "arbitrage",
-    "0x1fdb319cc1be16ff75ef84e408b0bc1594dd4d3c": "arbitrage"
+    "0x1fdb319cc1be16ff75ef84e408b0bc1594dd4d3c": "arbitrage",
+    "0x767c8bb1574bee5d4fe35e27e0003c89d43c5121": "eigenphi-arbitrage"
   },
   "non-cefidefi": {
     "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": 6407,

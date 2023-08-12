@@ -2,8 +2,9 @@ import json
 import collections
 import constants
 import analysis
-from collections import defaultdict
+from collections import defaultdict, Counter
 from itertools import islice
+import visual_analysis
 
 
 def load_dict_from_json(filename):
@@ -44,8 +45,11 @@ def find_joint_between_two_searcher_db(db_one, db_two):
 def find_only_in_db_one(db_one, db_two):
     return {k: v for k, v in db_one.items() if k not in db_two.keys()}
 
-def remove_known_addrs_from_list(searchers):
+def remove_common_addrs(searchers):
     return {k: v for k, v in searchers.items() if k not in constants.COMMON_CONTRACTS}
+
+def return_common_addrs(searchers):
+    return {k: v for k, v in searchers.items() if k in constants.COMMON_CONTRACTS}
 
 # Checks LIST of bots against Etherscan's MEV Bots, returns lists of known and potential bots
 def check_mev_bots(potential_bots):
@@ -60,7 +64,7 @@ def check_mev_bots(potential_bots):
     return found_known_bots, found_potential_bots
  
 
-def return_unknown_bots(bots, dir):
+def return_non_mev_bots(bots, dir):
     # eliminate known etherscan bots 
     etherscan_bots = load_dict_from_json("searcher_databases/etherscan_searchers.json").keys()
     # eliminate bots did coinbase transfers
@@ -70,30 +74,32 @@ def return_unknown_bots(bots, dir):
     return {k: v for k, v in bots.items() if k not in etherscan_bots 
             and k not in coinbase_bots and k not in mine_bots}
 
+def remove_atomic_bots(bots):
+    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
+    return {k: v for k, v in bots.items() if k not in atomic}
 
-def return_known_bots(bots, dir):
+def return_mev_bots(bots, dir):
     # eliminate known etherscan bots 
     etherscan_bots = load_dict_from_json("searcher_databases/etherscan_searchers.json").keys()
     # eliminate bots did coinbase transfers
-    coinbase_bots = load_dict_from_json(dir + "coinbase_bribes.json").keys()
+    coinbase_bots = load_dict_from_json(dir + "coinbase_bribe.json").keys()
     # eliminate bots that i labeled
-    mine_bots = load_dict_from_json("searcher_databases/mine_searchers.json").keys()
-    return {k: v for k, v in bots.items() if k in etherscan_bots 
-            or k in coinbase_bots or k in mine_bots}
+    # mine_bots = load_dict_from_json("searcher_databases/mine_searchers.json").keys()
+    return {k: v for k, v in bots.items() if k in etherscan_bots or k in coinbase_bots}
 
 
 
 def compare_two_thresholds(lower, higher, lower_dir, higher_dir): 
     # calculate how many bots are known in lower and higher
     bots_only_in_lower = find_only_in_db_one(lower, higher)
-    known_in_lower = return_known_bots(lower, lower_dir)
-    known_only_in_lower = return_known_bots(bots_only_in_lower, lower_dir)
-    known_in_higher = return_known_bots(higher, higher_dir)
-    print(f"{len(known_in_lower)} bots are known MEV bots in lower gas fee range.")
-    print(f"{len(known_in_higher)} bots are known MEV bots in higher gas fee range.")
+    mev_in_lower = return_mev_bots(lower, lower_dir)
+    mev_only_in_lower = return_mev_bots(bots_only_in_lower, lower_dir)
+    mev_in_higher = return_mev_bots(higher, higher_dir)
+    print(f"{len(mev_in_lower)} bots are known MEV bots in lower gas fee range.")
+    print(f"{len(mev_in_higher)} bots are known MEV bots in higher gas fee range.")
     # compare number of results, which could increase efficiency
     print(f"{len(lower)} bots are found in a lower threshold, and {len(higher)} bots found in higher threshold")
-    print(f"Within these additional {len(bots_only_in_lower)} bots captured by this lower threshold, {len(known_only_in_lower)} bots are known MEV bots")
+    print(f"Within these additional {len(bots_only_in_lower)} bots captured by this lower threshold, {len(mev_only_in_lower)} bots are known MEV bots")
 
 
 
@@ -122,35 +128,60 @@ def analyse_top_x(searchers, x):
     print(f"Cefi-defi arbs is responsible for at least {round(cefidefi_tx_count / total_tx_count * 100, 2)}% of all txs\n") 
 
     return cefidefi_tx_count / total_top_ten_tx_count
-    
+
+def trim_agg(agg_dir, threshold):
+    agg = load_dict_from_json(agg_dir + "/" + agg_dir + "_searchers_agg.json")
+    sorted_agg = {k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True) if v >= threshold}
+    dump_dict_to_json(sorted_agg, agg_dir + "/trimmed_agg.json")
+
+
+def combine_atomic_nonatomic_agg():
+    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
+    non_atomic = load_dict_from_json("non_atomic/above_50_median/cefi_searchers_agg.json")
+    result = dict(Counter(atomic) + Counter(non_atomic))
+    # sorted_result = {k: v for k, v in sorted(result.items(), key=lambda item: item[1], reverse=True) if v >= 5}
+    sorted_result = {k: v for k, v in sorted(result.items(), key=lambda item: item[1], reverse=True)[:20]}
+    dump_dict_to_json(sorted_result, "all_searchers.json")
+    return sorted_result
+
+def remove_coinbase_bribe_searchers(all_nonatomic):
+    coinbase_searchers = load_dict_from_json("non_atomic/all_swaps/coinbase_bribe.json").keys()
+    return {k: v for k, v in all_nonatomic.items() if k not in coinbase_searchers}
+
+def slice_dict(d, n):
+    return dict(islice(d.items(), n))
+
+def analyse_gas_bribe_searchers():
+    all_nonatomic = load_dict_from_json("non_atomic/all_swaps/nonatomic_searchers_agg.json")
+    gas_nonatomic = remove_coinbase_bribe_searchers(all_nonatomic)
+    unknown_gas_nonatomic = remove_common_addrs(gas_nonatomic)
+    # out of all the bots that paid exclusively via gas fees, these are bots 
+    # that we havent been able to account for using the list
+    visual_analysis.overlap_searcher_frequency_maps(gas_nonatomic, unknown_gas_nonatomic)
+
+    between_100_200_txs = {k: v for k, v in gas_nonatomic.items() if v >= 100 and v <= 200}
+    dump_dict_to_json(between_100_200_txs, "between_100_200_nonatomictxs.json")
+
+
 
 if __name__ == "__main__":
-    # cleaned = remove_known_addrs_from_list(load_dict_from_json("non_atomic/above_50_median/cefi_searchers_agg.json"))
-    # dump_dict_to_json(cleaned, "non_atomic/above_50_median/new_cefi_searchers_agg.json")
+    # what is missing from using the direction heuristic? mev bots, routers, swing bots?
+    base = "non_atomic/"
+    searcher_agg = "nonatomic_searchers_agg.json"
+    direction = load_dict_from_json(base + "direction/" + searcher_agg)
+    # high_gas = load_dict_from_json(base + "all_swaps/" + searcher_agg)
+    # eliminated = find_only_in_db_one(high_gas, direction)
+    # eliminated_not_common = remove_common_addrs(eliminated)
+    # eliminated_mev = return_mev_bots(eliminated, base+"direction/")
+    # dump_dict_to_json(eliminated_mev, "mev_eliminated_from_direction.json")
 
-    all_bots = load_dict_from_json("non_atomic/above_50_median/cefi_searchers_agg.json")
-    analyse_top_x(all_bots, 10)
-    analyse_top_x(all_bots, 20)
-    analyse_top_x(all_bots, 30)
+    mev_in_direction = return_mev_bots(direction, base+"direction/")
+    common_in_direction = return_common_addrs(direction)
+    not_mev_not_common = find_only_in_db_one(find_only_in_db_one(direction, mev_in_direction), common_in_direction) 
+    dump_dict_to_json(mev_in_direction, "mev_direction.json")
+    dump_dict_to_json(not_mev_not_common, "not_mev_not_common_direction.json")
 
-    # unknown_bots = return_unknown_bots(all_bots, "non_atomic/above_50_median/")
 
-    # dump_dict_to_json(unknown_bots, "non_atomic/above_50_median/unknown_bots.json")
-
-    # agg_1 = create_agg_from_bribes("non_atomic/above_median")
-    # agg_1 = {k: v for k, v in sorted(agg_1.items(), key=lambda item: item[1], reverse=True)}
-    # dump_dict_to_json(agg_1, "non_atomic/above_median/new_cefi_searchers_agg.json")
-
-    # # print("comparing median * 1.25 and median * 1.5")
-    # # lower = "non_atomic/above_125_median/"
-    # # higher = "non_atomic/above_15_median/"
-    # # lower_bots = load_dict_from_json(lower + "cefi_searchers_agg.json")
-    # # higher_bots = load_dict_from_json(higher + "cefi_searchers_agg.json")
-    # # compare_two_thresholds(lower_bots, higher_bots, lower, higher)
-
-    # print("comparing median * 1 and median * 1.25")
-    # lower = "non_atomic/above_median/"
-    # higher = "non_atomic/above_125_median/"
-    # lower_bots = load_dict_from_json(lower + "new_cefi_searchers_agg.json")
-    # higher_bots = load_dict_from_json(higher + "cefi_searchers_agg.json")
-    # compare_two_thresholds(lower_bots, higher_bots, lower, higher)
+    # result:
+    # didnt get any known MEV bots using the heuristics
+    # 
