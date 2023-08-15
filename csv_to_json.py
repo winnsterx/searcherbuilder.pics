@@ -1,18 +1,24 @@
 import csv
 import json
+import re
 
-csvfile = open('./block_to_builder_50k_from_17666420.csv', 'r')
-jsonfile = open('block_to_builder.json', 'w')
+csvfile = open('./labeled_contracts.csv', 'r')
+jsonfile = open('labeled_contracts.json', 'w')
 
-block_to_builder = {}
+labeled_contracts = {}
 
-with open('./block_to_builder_50k_from_17666420.csv', newline='') as file:
+def replace_upper_non_alnum(s):
+    s = re.sub(r'[^a-zA-Z0-9]+', '_', s)
+    return s.upper()
+
+with open('./labeled_contracts.csv', newline='') as file:
     reader = csv.DictReader(file)
     for row in reader:
-        block_number = row['block_number']
-        builder = row['builder']
-        block_to_builder[block_number] = builder
+        address = row['address']
+        label = replace_upper_non_alnum(row['name'])
+        labeled_contracts[label] = address
 
 with jsonfile as jsonfile: 
-    json.dump(block_to_builder, jsonfile)
+    json.dump(labeled_contracts, jsonfile)
         
+

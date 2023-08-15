@@ -19,10 +19,27 @@
     "0xd19dc09880685dd8cf60687d57936358582876b5": "arbitrage",
     "0x605e35e88b2eba3ff084045d8eb8ae881c7e9dcb": "arbitrage",
     "0x1fdb319cc1be16ff75ef84e408b0bc1594dd4d3c": "arbitrage",
-    "0x767c8bb1574bee5d4fe35e27e0003c89d43c5121": "eigenphi-arbitrage"
+    "0xc0de02babe048d279d1ac193930169e715fe7612": "arbitrage",
+    "0xac6a9e9ca65d4bcbea3e59c4c40128052bcc8882": "arbitage",
+    "0x0090eb43008a030065000000e70099482c00b6df": "arbitrage",
+    "0x767c8bb1574bee5d4fe35e27e0003c89d43c5121": "eigenphi-arbitrage",
+    "0x2d2a7d56773ae7d5c7b9f1b57f7be05039447b4d": "atomic sandwich+arb",
+    "0x000000000015159abc7d42e8e813328b5a034c0d": "sandwich"
   },
   "non-cefidefi": {
     "0xd4315668aa1d88b4c581ec6fa902e131286dd0ab": 6407,
     "0xc11ce44147c9f6149fbe54adb0588523c38718d7": 3030
+  },
+  "cefi-defi": {
+    "0xe8cfad4c75a5e1caf939fd80afcf837dde340a69": 8264,
+    "0x28e261390adaa654f29dbe268109baf06e9b4cc4": 2266,
+    "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45": 1886,
+    "0x593ac83229d3099c57cc721540c4d535a7fbbfd6": 1156,
+    "0xd249942f6d417cbfdcb792b1229353b66c790726": 846,
+    "0x0773edc0438b2ef18fc535b21d0ac77912c308c0": 733,
+    "0xbd4fecd9337d22514fdd6d7fbeb9155cf8d790b1": 160,
+    "0x5f40e515f50724892a64f3056cc5b17b16504e55": 87,
+    "0x1c073d5045b1abb6924d5f0f8b2f667b1653a4c3": 85,
+    "0x2b3b6d4c350a48d7f224242656aabb6fae3bc955": 76
   }
 }
