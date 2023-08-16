@@ -31,7 +31,7 @@ def overlap_searcher_frequency_maps(bottom, top):
     plt.show(block=False)
 
 
-def searcher_builder_order_flow(map, agg):
+def searcher_builder_order_flow(map, agg, title):
     # Process data
     nodes = list(agg.keys()) + list(map.keys())
     source_indices = []
@@ -56,7 +56,7 @@ def searcher_builder_order_flow(map, agg):
     )
 
     # Layout
-    fig.update_layout(title_text="Sankey Diagram", font_size=10)
+    fig.update_layout(title_text=title, font_size=10)
     fig.show()
 
 
@@ -66,4 +66,4 @@ if __name__ == "__main__":
 
     top_map, top_agg = analysis.get_map_in_range(map, agg, 0.9)
 
-    searcher_builder_order_flow(top_map, top_agg)
+    searcher_builder_order_flow(top_map, top_agg, "searcher-builder orderflow")
