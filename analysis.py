@@ -162,9 +162,16 @@ def analyse_gas_bribe_searchers():
     between_100_200_txs = {k: v for k, v in gas_nonatomic.items() if v >= 100 and v <= 200}
     dump_dict_to_json(between_100_200_txs, "between_100_200_nonatomictxs.json")
 
+def rid_map_of_small_addrs(map, agg, ):
+    trimmed_agg = {k: v for k, v in agg.items() if v >= 100}
+    trimmed_map = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in builder_x_map.items():
+        for searcher, count in searchers.items():
+            if searcher in trimmed_agg.keys():
+                trimmed_map[builder][searcher] = count
+    return trimmed_map
 
-
-if __name__ == "__main__":
+def rid_known_entities():
     all_swaps = load_dict_from_json("non_atomic/after_and_tob/all_nonatomic_searchers_agg.json")
     rid_labeled = {}
     rid_all = {}
@@ -180,3 +187,30 @@ if __name__ == "__main__":
     dump_dict_to_json(rid_all, "non_atomic/after_and_tob/nonatomic_searchers_agg.json")
 
 
+def get_map_in_range(map, agg, threshold):
+    total_tx_count = sum(agg.values())
+    threshold = total_tx_count * threshold
+
+    # Find the top searchers with a collective transaction count >50%
+    running_total = 0
+    top_searchers = {}
+    for searcher, count in agg.items():
+        running_total += agg[searcher]
+        top_searchers[searcher] = count
+        if running_total > threshold:
+            break
+
+    # Filter the data based on the top searchers
+    filtered_map = {}
+    for builder, searchers in map.items():
+        filtered_map[builder] = {searcher: tx_count for searcher, tx_count in searchers.items() if searcher in top_searchers}
+
+    return filtered_map, top_searchers
+
+
+if __name__ == "__main__":
+    map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
+    agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")
+    sorted_map = {builder: dict(sorted(searchers.items(), key=lambda item: item[1], reverse=True)) for builder, searchers in map.items()}
+
+    dump_dict_to_json(rid_map_of_small_addrs(sorted_map, agg), "atomic/smaller_map.json")

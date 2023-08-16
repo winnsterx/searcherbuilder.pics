@@ -31,6 +31,39 @@ def overlap_searcher_frequency_maps(bottom, top):
     plt.show(block=False)
 
 
-def order_flow():
-    atomic_builder_searcher_map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
-    atomic_searcher_agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")
+def searcher_builder_order_flow(map, agg):
+    # Process data
+    nodes = list(agg.keys()) + list(map.keys())
+    source_indices = []
+    target_indices = []
+    values = []
+
+    for builder, searchers in map.items():
+        for searcher, tx_count in searchers.items():
+            source_indices.append(nodes.index(searcher))
+            target_indices.append(nodes.index(builder))
+            values.append(tx_count)
+
+    hover_texts = [f"Outgoing flow: {agg[searcher]}" for searcher in agg]
+    hover_texts.extend([''] * len(map.keys()))
+
+    # Create Sankey diagram
+    fig = go.Figure(
+        go.Sankey(
+            node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=nodes),
+            link=dict(source=source_indices, target=target_indices, value=values),
+        )
+    )
+
+    # Layout
+    fig.update_layout(title_text="Sankey Diagram", font_size=10)
+    fig.show()
+
+
+if __name__ == "__main__":
+    map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
+    agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")
+
+    top_map, top_agg = analysis.get_map_in_range(map, agg, 0.9)
+
+    searcher_builder_order_flow(top_map, top_agg)
