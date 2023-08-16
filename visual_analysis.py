@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pandas as pd
 import analysis
 
@@ -28,3 +29,8 @@ def overlap_searcher_frequency_maps(bottom, top):
     plt.tight_layout()
 
     plt.show(block=False)
+
+
+def order_flow():
+    atomic_builder_searcher_map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
+    atomic_searcher_agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")

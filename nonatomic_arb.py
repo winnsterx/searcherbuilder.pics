@@ -31,7 +31,7 @@ GAS_PRICE_MULTIPLIER = 1.5
 
 # Gets all swap txs in a block of given number by querying Zeromev
 def get_swaps(block_number):
-    swaps_everything = []
+    swaps = []
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
     payload = {
         'block_number': block_number,
@@ -42,13 +42,8 @@ def get_swaps(block_number):
         data = res.json()
         for tx in data:
             if tx['mev_type'] == "swap" or tx['mev_type'] == "sandwich":
-                swaps_everything.append(tx)
-
-            # if tx['mev_type'] == "swap" and tx["address_to"] not in constants.COMMON_CONTRACTS:
-            #     swaps_exclude_common.append(tx) 
-            # elif tx['mev_type'] == "sandwich" and tx["address_to"] not in constants.COMMON_CONTRACTS:
-            #     swaps_exclude_common.append(tx) 
-        return swaps_everything                        
+                swaps.append(tx)
+        return swaps                        
     else: 
         print("error w requesting zeromev:", res.status_code)
 
@@ -57,6 +52,7 @@ def get_swaps(block_number):
 def calculate_block_median_gas_price(transactions):
     gas_prices = [tx['gasPrice'] for tx in transactions]
     return statistics.median(gas_prices)
+
 
 # Simplifies transfers returned by Alchemy's getInternalTransfers function
 def simplify_transfers(transfers):
@@ -95,95 +91,24 @@ def get_internal_transfers_in_block(block_number, builder):
     return transfer_map
 
 
-# if the swap is either sending erc20 FROM or TO the EOA,
-# meaning that the capital is coming from EOA, then this swap isnt MEV 
-def is_capital_from_contract(tx, block_number):
-    headers = { "accept": "application/json", "content-type": "application/json" }
-    payload = {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "method": "alchemy_getAssetTransfers",
-        "params": [
-            {
-                "category": ["erc20"],
-                "fromAddress": tx["to"], 
-                "fromBlock": hex(int(block_number)),
-                "toBlock": hex(int(block_number))
-            }
-        ]
-    }
-    response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
-    transfers = response.json()["result"]["transfers"]
-    # if len(transfers) == 0: no transfer back to the contract, to somewhere else
-    return len(transfers)
-
-# if the swap is either sending erc20 FROM or TO the EOA,
-# meaning that the capital is coming from EOA, then this swap isnt MEV 
-def is_swap_back_to_contract(tx, block_number):
-    headers = { "accept": "application/json", "content-type": "application/json" }
-    payload = {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "method": "alchemy_getAssetTransfers",
-        "params": [
-            {
-                "category": ["erc20"],
-                "toAddress": tx["to"], 
-                "fromBlock": hex(int(block_number)),
-                "toBlock": hex(int(block_number))
-            }
-        ]
-    }
-    response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
-    transfers = response.json()["result"]["transfers"]
-    # if len(transfers) == 0: no transfer back to the contract, to somewhere else
-    return len(transfers)
-
-def is_swap_back_to_EOA(tx, block_number):
-    headers = { "accept": "application/json", "content-type": "application/json" }
-    payload = {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "method": "alchemy_getAssetTransfers",
-        "params": [
-            {
-                "category": ["erc20"],
-                "toAddress": tx["from"], 
-                "fromBlock": hex(int(block_number)),
-                "toBlock": hex(int(block_number))
-            }
-        ]
-    }
-    response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
-    transfers = response.json()["result"]["transfers"]
-    # if len(transfers) > 0: swap went back to the EOA 
-    return len(transfers)
-
-def is_mev_swap_pattern(tx, block_number):
-    # should swap from CONTRACT count too?
-    # if NO erc20 transfer to contract, then not MEV tx 
-    transfers_back_to_contract = is_swap_back_to_contract(tx, block_number)
-    if transfers_back_to_contract == 0:
-        return False
-    # if erc20 transfer to EOA, then not MEV tx
-    transfers_back_to_EOA = is_swap_back_to_EOA(tx, block_number)
-    if transfers_back_to_EOA > 0:
-        return False
-    return True
-
+def followed_by_transfer_to_builder(fee_recipient, cur_tx, next_tx):
+    if next_tx["from"] == cur_tx["from"] and next_tx["to"] == fee_recipient:
+        return True
+    return False 
 
 # Given a block and its txs, get all the valid swap txs in that block, check that the swap txs 
-# EITHER contains an internal transfer to builder OR pays "high" gas price. 
-def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_bribe):
+# EITHER contains an internal transfer to builder OR pays in top of block. 
+def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe):
     extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
-    builder = searcher_db.map_extra_data_to_builder(extra_data, block["feeRecipient"])
-    
+    # human-readable builder name, derived from extraData 
+    builder = searcher_db.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
+    # hex-string of feeRecipient. can be builder or proposer
     fee_recipient = block["feeRecipient"]
+    median_gas = calculate_block_median_gas_price(block["transactions"])
     transfer_map = get_internal_transfers_in_block(block_number, fee_recipient)
 
     all_swaps = get_swaps(block_number)
 
-    median_gas_price = calculate_block_median_gas_price(block["transactions"])
     total_txs = len(block["transactions"])
     top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
     print(block_number, total_txs)
@@ -191,40 +116,46 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
 
     # only consider txs labeled as swap by zeromev
     for swap in all_swaps:
-        tx = block["transactions"][swap['tx_index']] 
-        
+        tx_index = swap['tx_index']
+        tx = block["transactions"][tx_index] 
+        # if bribe via coinbase transfer
         if tx["hash"] in transfer_map.keys(): 
-            # bribing with coinbase transfers
             builder_swapper_map[builder][transfer_map[tx['hash']]["from"]] += 1
-            if tx["to"] in coinbase_bribe:
-                coinbase_bribe[transfer_map[tx['hash']]["from"]].append(tx['hash'])
-            else: 
-                coinbase_bribe[transfer_map[tx['hash']]["from"]] = [tx["hash"]]
+            coinbase_bribe.setdefault(transfer_map[tx['hash']]["from"], []).append({
+                "hash": tx["hash"],
+                "builder": builder,
+            })
+        # if followed by a direct transfer to builder
+        elif followed_by_transfer_to_builder(fee_recipient, tx, block["transactions"][tx_index + 1]) == True:
+            # mev bot collected here will be an EOA
+            builder_swapper_map[builder][tx["from"]] += 1
+            after_bribe.setdefault(tx["from"], []).append({
+                "hash": tx["hash"],
+                "builder": builder,
+            })
         # if within top of block (first 10%):
         elif swap['tx_index'] <= top_of_block_boundary:
             builder_swapper_map[builder][tx["to"]] += 1
-            gas_bribe[tx["to"]].append((
-                tx["hash"], tx["gasPrice"]
-            ))
+            tob_bribe.setdefault(tx["to"], []).append({
+                "hash": tx['hash'],
+                "builder": builder,
+                "index": tx_index,
+                "gas_price": tx['gasPrice'],
+                "block_median_gas": median_gas,
+            })
         
-        # elif (tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER_1) and (tx["gasPrice"] < median_gas_price * GAS_PRICE_MULTIPLIER_2):
-        #     # bribing with gas_fee that is above median, but below median * 1.2 
-        #     if tx["to"] in gas_fee_bribe_lower:
-        #         gas_fee_bribe_lower[tx["to"]].append(tx['hash'])
-        #     else: 
-        #         gas_fee_bribe_lower[tx["to"]] = [tx["hash"]]
-
 
 def analyze_blocks(blocks):
     builder_swapper_map = defaultdict(lambda: defaultdict(int))
     coinbase_bribe = {}
-    gas_bribe = {}
+    after_bribe = {}
+    tob_bribe = {}
     with ThreadPoolExecutor(max_workers=64) as executor:
         # Use the executor to submit the tasks
-        futures = [executor.submit(analyze_block, block_number, block, builder_swapper_map, coinbase_bribe, gas_bribe) for block_number, block in blocks.items()]
+        futures = [executor.submit(analyze_block, block_number, block, builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe) for block_number, block in blocks.items()]
         for future in as_completed(futures):
             pass
-    return builder_swapper_map, coinbase_bribe, gas_bribe
+    return builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe
     
 
 # end result: 1) builder swapper map that shows builder: searcher where searchers have submitted more than 5 times
@@ -233,17 +164,18 @@ def analyze_blocks(blocks):
     # lower threshold nets mev bots without adding false positives. 
     # will we include swaps that are actually not MEV, if we lower the threshold? 
 
-def compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, gas_bribe):
-    trimmed_map = searcher_db.clean_up(builder_swapper_map, 5)
-    analysis.dump_dict_to_json(trimmed_map, "non_atomic/all_swaps/builder_nonatomic_map.json")
+def compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe):
+    # trimmed_map = searcher_db.clean_up(builder_swapper_map, 5)
+    analysis.dump_dict_to_json(builder_swapper_map, "non_atomic/after_and_tob_2/builder_nonatomic_map.json")
 
     agg = analysis.aggregate_searchers(builder_swapper_map)
-    trimmed_agg = {k: v for k, v in agg.items() if v >= 5 or k in coinbase_bribe.keys()}
-    analysis.dump_dict_to_json(trimmed_agg, "non_atomic/all_swaps/nonatomic_searchers_agg.json")
+    # trimmed_agg = {k: v for k, v in agg.items() if v >= 5 or k in coinbase_bribe.keys()}
+    analysis.dump_dict_to_json(agg, "non_atomic/after_and_tob_2/nonatomic_searchers_agg.json")
 
     # bots that are only included when threshold is lower, 
-    analysis.dump_dict_to_json(gas_bribe, "non_atomic/all_swaps/gas_bribe.json")
-    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/all_swaps/coinbase_bribe.json")
+    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/after_and_tob_2/coinbase_bribe.json")
+    analysis.dump_dict_to_json(after_bribe, "non_atomic/after_and_tob_2/after_bribe.json")
+    analysis.dump_dict_to_json(tob_bribe, "non_atomic/after_and_tob_2/tob_bribe.json")
 
 
 if __name__ == "__main__":
@@ -254,8 +186,8 @@ if __name__ == "__main__":
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
-    builder_swapper_map, coinbase_bribe, gas_bribe = analyze_blocks(blocks_fetched)
+    builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(blocks_fetched)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 
-    compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, gas_bribe)
+    compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe)

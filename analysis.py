@@ -165,7 +165,7 @@ def analyse_gas_bribe_searchers():
 
 
 if __name__ == "__main__":
-    all_swaps = load_dict_from_json("non_atomic/direction/nonatomic_searchers_agg.json")
+    all_swaps = load_dict_from_json("non_atomic/after_and_tob/all_nonatomic_searchers_agg.json")
     rid_labeled = {}
     rid_all = {}
 
@@ -173,12 +173,10 @@ if __name__ == "__main__":
         if addr not in constants.COMMON_CONTRACTS:
             rid_labeled[addr] = count
 
-    dump_dict_to_json(rid_labeled, "non_atomic/direction/rid_common.json")
-
     for addr, count in rid_labeled.items():
         if addr not in constants.LABELED_CONTRACTS.values():
             rid_all[addr] = count
 
-    dump_dict_to_json(rid_all, "non_atomic/direction/rid_labeled.json")
+    dump_dict_to_json(rid_all, "non_atomic/after_and_tob/nonatomic_searchers_agg.json")
 
 

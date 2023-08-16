@@ -1,4 +1,5 @@
 import requests, json, time, ijson
+from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -53,30 +54,37 @@ def process_batch_response(response, blocks_fetched):
 
 # Sends batch requests of 1000 to node 
 # Uses exponential retries when errors are encountered 
-def batch_request(block, end_block, batch_size, retries, blocks_fetched):
+        
+# def batch_request(block, end_block, batch_size, retries, blocks_fetched):
+def batch_request(batch, retries, blocks_fetched):
     headers = {"Content-Type": "application/json"}
-    batch = [{"jsonrpc": "2.0", "id": i, "method":"eth_getBlockByNumber", "params":[hex(i), True]} 
-             for i in range(block, min(block + batch_size, end_block + 1))]
+    # batch = [{"jsonrpc": "2.0", "id": i, "method":"eth_getBlockByNumber", "params":[hex(i), True]} 
+    #          for i in range(block, min(block + batch_size, end_block + 1))]
 
     while retries < MAX_RETRIES:
-        start = time.time()
-        print(f"Getting batch at {start}, attempt {retries + 1}")
-        response = requests.post(secret_keys.ALCHEMY, headers=headers, data=json.dumps(batch))
+        try: 
+            start = time.time()
+            print(f"Getting batch at {start}, attempt {retries + 1}")
+            response = requests.post(secret_keys.ALCHEMY, headers=headers, data=json.dumps(batch))
 
-        if response.status_code == 200:
-            success = process_batch_response(response, blocks_fetched)
-            if success: # if retry is not required, process is complete'
-                print("Batch successfully fetched & processed")
-                break
-        else: 
-            print(f"Non-success status code received: {response.status_code}, retrying for the {retries + 1} time")
+            if response.status_code == 200:
+                success = process_batch_response(response, blocks_fetched)
+                if success: # if retry is not required, process is complete'
+                    print("Batch successfully fetched & processed")
+                    break
+            else: 
+                print(f"Non-success status code received: {response.status_code}, retrying for the {retries + 1} time")
 
-        retries += 1
-        time.sleep(INITIAL_BACKOFF * (2 ** retries))  # Sleep before next retry with exponential backoff        
-        
-        if retries == MAX_RETRIES:
-            analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json") 
-            print("Max retries reached. Exiting.")
+            retries += 1
+            time.sleep(INITIAL_BACKOFF * (2 ** retries))  # Sleep before next retry with exponential backoff        
+            
+            if retries == MAX_RETRIES:
+                analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json") 
+                print("Max retries reached. Exiting.")
+        except IncompleteRead as e:
+            print(f"IncompleteRead error occurred: {e}, retrying for the {retries + 1} time")
+            retries += 1
+            time.sleep(INITIAL_BACKOFF * (2 ** retries))  # Sleep before next retry with exponential backof
 
 
 # Get all blocks in batch requests of 1000 
@@ -88,17 +96,17 @@ def get_blocks(start_block, num_blocks):
     start = time.time()
     print("starting to get blocks at ", start)
 
-    with ThreadPoolExecutor(max_workers=64) as executor:
-        # Use the executor to submit the tasks
-        futures = [executor.submit(batch_request, first_block_of_batch, 
-                                   end_block, batch_size, 0, blocks_fetched) for first_block_of_batch in range(start_block, end_block + 1, batch_size)]
-        for future in as_completed(futures):
-            pass
+    # with ThreadPoolExecutor(max_workers=64) as executor:
+    #     # Use the executor to submit the tasks
+    #     futures = [executor.submit(batch_request, first_block_of_batch, 
+    #                                end_block, batch_size, 0, blocks_fetched) for first_block_of_batch in range(start_block, end_block + 1, batch_size)]
+    #     for future in as_completed(futures):
+    #         pass
 
-    # for block in range(start_block, end_block + 1, batch_size):
-    #     batch = [{"jsonrpc": "2.0", "id": i, "method":"eth_getBlockByNumber", "params":[hex(i), True]} 
-    #              for i in range(block, min(block + batch_size, end_block + 1))]
-    #     batch_request(batch, 0, blocks_fetched)
+    for block in range(start_block, end_block + 1, batch_size):
+        batch = [{"jsonrpc": "2.0", "id": i, "method":"eth_getBlockByNumber", "params":[hex(i), True]} 
+                 for i in range(block, min(block + batch_size, end_block + 1))]
+        batch_request(batch, 0, blocks_fetched)
     
     print("finished getting blocks in", time.time() - start, " seconds")
     return blocks_fetched
@@ -145,7 +153,8 @@ if __name__ == "__main__":
 
     # 17,779,790 is where we left off 
     start_block = 17779791
-    num_blocks = 38920
+    num_blocks = 8000
+    # num_blocks = 38920
 
     blocks = get_blocks(start_block, num_blocks)
     analysis.dump_dict_to_json(blocks, "new_blocks.json")
