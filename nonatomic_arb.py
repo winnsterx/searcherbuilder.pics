@@ -97,6 +97,28 @@ def get_internal_transfers_in_block(block_number, builder):
 
 # if the swap is either sending erc20 FROM or TO the EOA,
 # meaning that the capital is coming from EOA, then this swap isnt MEV 
+def is_capital_from_contract(tx, block_number):
+    headers = { "accept": "application/json", "content-type": "application/json" }
+    payload = {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "alchemy_getAssetTransfers",
+        "params": [
+            {
+                "category": ["erc20"],
+                "fromAddress": tx["to"], 
+                "fromBlock": hex(int(block_number)),
+                "toBlock": hex(int(block_number))
+            }
+        ]
+    }
+    response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
+    transfers = response.json()["result"]["transfers"]
+    # if len(transfers) == 0: no transfer back to the contract, to somewhere else
+    return len(transfers)
+
+# if the swap is either sending erc20 FROM or TO the EOA,
+# meaning that the capital is coming from EOA, then this swap isnt MEV 
 def is_swap_back_to_contract(tx, block_number):
     headers = { "accept": "application/json", "content-type": "application/json" }
     payload = {
@@ -138,6 +160,7 @@ def is_swap_back_to_EOA(tx, block_number):
     return len(transfers)
 
 def is_mev_swap_pattern(tx, block_number):
+    # should swap from CONTRACT count too?
     # if NO erc20 transfer to contract, then not MEV tx 
     transfers_back_to_contract = is_swap_back_to_contract(tx, block_number)
     if transfers_back_to_contract == 0:
@@ -161,12 +184,15 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
     all_swaps = get_swaps(block_number)
 
     median_gas_price = calculate_block_median_gas_price(block["transactions"])
+    total_txs = len(block["transactions"])
+    top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
+    print(block_number, total_txs)
 
-    print(block_number)
 
     # only consider txs labeled as swap by zeromev
     for swap in all_swaps:
         tx = block["transactions"][swap['tx_index']] 
+        
         if tx["hash"] in transfer_map.keys(): 
             # bribing with coinbase transfers
             builder_swapper_map[builder][transfer_map[tx['hash']]["from"]] += 1
@@ -174,19 +200,13 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, gas_
                 coinbase_bribe[transfer_map[tx['hash']]["from"]].append(tx['hash'])
             else: 
                 coinbase_bribe[transfer_map[tx['hash']]["from"]] = [tx["hash"]]
-        elif tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER:
-            is_mev_pattern = is_mev_swap_pattern(tx, block_number)
-            if is_mev_pattern == False: 
-            # transfered erc tokens to NOT the smart contract 
-            # sifts out routers, but doesnt take out swing bots
-                continue
-                
-            # bribing w gas_fee at least 50% above median 
+        # if within top of block (first 10%):
+        elif swap['tx_index'] <= top_of_block_boundary:
             builder_swapper_map[builder][tx["to"]] += 1
-            if tx["to"] in gas_bribe:
-                gas_bribe[tx["to"]].append(tx['hash'])
-            else: 
-                gas_bribe[tx["to"]] = [tx["hash"]]
+            gas_bribe[tx["to"]].append((
+                tx["hash"], tx["gasPrice"]
+            ))
+        
         # elif (tx["gasPrice"] >= median_gas_price * GAS_PRICE_MULTIPLIER_1) and (tx["gasPrice"] < median_gas_price * GAS_PRICE_MULTIPLIER_2):
         #     # bribing with gas_fee that is above median, but below median * 1.2 
         #     if tx["to"] in gas_fee_bribe_lower:
