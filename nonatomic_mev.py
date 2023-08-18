@@ -9,7 +9,7 @@ import requests
 from collections import defaultdict
 import statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
-import searcher_db
+import atomic_mev
 import analysis
 import constants
 import secret_keys
@@ -70,7 +70,7 @@ def simplify_transfers(transfers):
 
 # block_number: string, builder: string
 # Gets set of internal transfers to the builder in a block using Alchemy's API
-def get_internal_transfers_in_block(block_number, builder):
+def get_internal_transfers_to_fee_recipient_in_block(block_number, builder):
     headers = { "accept": "application/json", "content-type": "application/json" }
     payload = {
         "id": 1,
@@ -102,11 +102,11 @@ def analyze_block(block_number, block, builder_swapper_map_tx, builder_swapper_m
                   builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
     # human-readable builder name, derived from extraData 
-    builder = searcher_db.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
+    builder = atomic_mev.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
     # hex-string of feeRecipient. can be builder or proposer
     fee_recipient = block["feeRecipient"]
     median_gas = calculate_block_median_gas_price(block["transactions"])
-    transfer_map = get_internal_transfers_in_block(block_number, fee_recipient)
+    transfer_map = get_internal_transfers_to_fee_recipient_in_block(block_number, fee_recipient)
 
     all_swaps = get_swaps(block_number)
 

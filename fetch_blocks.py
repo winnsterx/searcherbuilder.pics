@@ -164,8 +164,8 @@ if __name__ == "__main__":
 
     # 17,779,790 is where we left off 
 
-    blocks = get_blocks(start_block, num_blocks)
-    analysis.dump_dict_to_json(blocks, "new_blocks.json")
+    blocks = get_blocks(17944266, 2)
+    analysis.dump_dict_to_json(blocks, "block_data/two_blocks.json")
     count_blocks(blocks, start_block)
 
 

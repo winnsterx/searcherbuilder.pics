@@ -229,6 +229,15 @@ def prune(dir):
         res = remove_known_entities_and_atomic_bots(agg)
         dump_dict_to_json(res, dir+"/pruned/agg/"+os.path.basename(a))
 
+def aggregate_atomic_searchers(builder_atomic_map):
+    # {builder: {searcher: {"total": x, "arb": x, "frontrun": x, "backrun": x, "liquid": x}}}
+    # aggregate means adding up the total for each searcher
+    agg = defaultdict(int)
+    for _, searchers in builder_atomic_map.items():
+        for searcher, counts in searchers.items():
+            agg[searcher] += counts["total"]
+    return agg
+
 
 
 
