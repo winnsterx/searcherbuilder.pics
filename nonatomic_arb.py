@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # 17563790 to 17779790
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
-    blocks_fetched = analysis.load_dict_from_json("block_data/all_blocks_30_days.json")
+    blocks_fetched = analysis.load_dict_from_json("block_data/blocks_30_days.json")
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
