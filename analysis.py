@@ -1,4 +1,4 @@
-import os, time
+import os, time, math
 import json
 import collections
 import constants
@@ -54,16 +54,16 @@ def return_common_addrs(searchers):
     return {k: v for k, v in searchers.items() if k in constants.COMMON_CONTRACTS}
 
 # Checks LIST of bots against Etherscan's MEV Bots, returns lists of known and potential bots
-def check_mev_bots(potential_bots):
+def check_mev_bots(bots):
     mev_bots = analysis.load_dict_from_json("searcher_databases/etherscan_searchers.json").keys()
-    found_known_bots = []
-    found_potential_bots = []
-    for bot in potential_bots:
+    known_bots = {}
+    unknown_bots = {}
+    for bot, count in bots.items():
         if bot in mev_bots:
-            found_known_bots.append(bot)
+            known_bots[bot] = count
         else:
-            found_potential_bots.append(bot)
-    return found_known_bots, found_potential_bots
+            unknown_bots[bot] = count
+    return known_bots, unknown_bots
  
 
 def return_non_mev_bots(bots, dir):
@@ -177,9 +177,11 @@ def rid_map_of_small_addrs(map, agg, ):
     return trimmed_map
 
 def remove_known_entities(agg):
-    for addr, _ in agg.items():
-        if addr in constants.COMMON_CONTRACTS or addr in constants.LABELED_CONTRACTS.values():
-            del agg[addr]
+    res = {}
+    for addr, count in agg.items():
+        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
+            res[addr] = count
+    return res
 
 def remove_known_entities_and_atomic_bots(agg):
     res = {}
@@ -191,10 +193,11 @@ def remove_known_entities_and_atomic_bots(agg):
 
             
 
-
+# agg is all the searchers, sans known entities
+# map is all the fields
 def get_map_in_range(map, agg, threshold):
-    total_tx_count = sum(agg.values())
-    threshold = total_tx_count * threshold
+    total_count = sum(agg.values())
+    threshold = total_count * threshold
 
     # Find the top searchers with a collective transaction count >50%
     running_total = 0
@@ -226,8 +229,10 @@ def prune(dir):
     agg_list = fetch_blocks.prepare_file_list(dir+"/agg")
     for a in agg_list:
         agg = load_dict_from_json(a)
-        res = remove_known_entities_and_atomic_bots(agg)
+        res = remove_known_entities(agg)
+        # res = remove_known_entities_and_atomic_bots(agg)
         dump_dict_to_json(res, dir+"/pruned/agg/"+os.path.basename(a))
+
 
 def aggregate_atomic_searchers(builder_atomic_map):
     # {builder: {searcher: {"total": x, "arb": x, "frontrun": x, "backrun": x, "liquid": x}}}
@@ -236,16 +241,22 @@ def aggregate_atomic_searchers(builder_atomic_map):
     for _, searchers in builder_atomic_map.items():
         for searcher, counts in searchers.items():
             agg[searcher] += counts["total"]
+    agg = {k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
     return agg
 
 
 
-
 if __name__ == "__main__":
-    start = time.time()
-    print("loading blocks now", start)
-    blocks = load_dict_from_json("block_data/blocks_30_days.json")
-    print("finished loading in ", time.time() - start)
+    nonatomic_dir = "non_atomic/new_vol_after_tob/"
+    nonatomic_map_dir = "builder_swapper_maps/"
 
-    start_block = 17595510 # Jul-01-2023 12:00:11 AM UTC
-    fetch_blocks.count_blocks(blocks, start_block)
+    # volume_map = load_dict_from_json(nonatomic_dir + nonatomic_map_dir + "builder_swapper_map_vol.json")
+    # volume_agg = load_dict_from_json(nonatomic_dir + "pruned/agg/agg_vol.json")
+
+    # map, agg = get_map_in_range(volume_map, volume_agg, 0.99)
+    # dump_dict_to_json(agg, nonatomic_dir + "percentile/agg_99.json")
+    # visual_analysis.searcher_builder_orderflow(map, agg, "nonatomic orderflow by volume")
+
+    # agg = load_dict_from_json(nonatomic_dir + "percentile/agg_95.json")    
+    # known, unknown = check_mev_bots(agg)
+    # dump_dict_to_json(unknown, nonatomic_dir+"percentile/unknowns/95.json")

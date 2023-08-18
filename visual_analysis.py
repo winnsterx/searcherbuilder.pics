@@ -60,8 +60,10 @@ def create_a_flow(map, agg, searcher=None):
 def searcher_builder_orderflow(map, agg, title):
     # Create a figure with a dropdown menu
     fig = make_subplots(specs=[[{'type': 'sankey'}]])
-    return fig
     fig.add_trace(create_a_flow(map, agg))
+    fig.update_layout(title_text=title, font_size=10)
+    fig.show()
+
 
     # Create a dropdown menu with all the searchers and an option for all searchers
     # menu_buttons = [dict(args=[{"data": [create_a_flow(map, agg)]}], label='All searchers', method='update')]
@@ -93,8 +95,6 @@ def searcher_builder_orderflow(map, agg, title):
     #     ]
     # )
 
-    fig.update_layout(title_text=title, font_size=10)
-    fig.show()
 
 
 if __name__ == "__main__":

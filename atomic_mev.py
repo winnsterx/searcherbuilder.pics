@@ -180,7 +180,7 @@ if __name__ == "__main__":
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
 
-    prefetched_blocks = analysis.load_dict_from_json("block_data/test_blocks.json")
+    prefetched_blocks = analysis.load_dict_from_json("block_data/blocks_30_days.json")
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
     builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe = analyze_blocks(prefetched_blocks)
