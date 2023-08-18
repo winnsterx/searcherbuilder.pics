@@ -3,3 +3,4 @@ all_blocks_30_days.json
 blocks_*.json
 block_data/
 non_atomic/after_and_tob/tob_bribe.json
+non_atomic/

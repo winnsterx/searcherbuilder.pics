@@ -12,10 +12,12 @@ swap_addrs = defaultdict(lambda: defaultdict(int))
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known router, dex, etc
-def incrementBotCount(builder, addr_to, mev_type):
+def incrementBotCount(builder, addr_from, addr_to, mev_type):
     global atomic_addrs
     if mev_type == "swap" or mev_type == "sandwich":
         return
+    if mev_type == "liquid":
+        atomic_addrs[builder][addr_from] += 1
     elif addr_to not in constants.COMMON_CONTRACTS: 
         # if tx is neither swap nor sandwich, it must be frontrun, backrun, liquidation, arb 
         atomic_addrs[builder][addr_to] += 1
@@ -59,7 +61,8 @@ def count_addrs_in_one_block(session, url, block_number, block):
             data = res.json()
             for tx in data:
                 addr_to = tx['address_to'].lower()
-                incrementBotCount(builder, addr_to, tx['mev_type'])
+                addr_from = tx['address_from'].lower()
+                incrementBotCount(builder, addr_from, addr_to, tx['mev_type'])
                                 
         else: 
             print("error w requesting zeromev:", res.status_code)
@@ -82,7 +85,7 @@ def clean_up(data, threshold):
 def count_addrs(prefetched_blocks):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
-
+    builder_atomic_map = defaultdict(lambda: defaultdict(int))
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
@@ -95,6 +98,7 @@ def count_addrs(prefetched_blocks):
         print("finished counting in", time.time() - start, " seconds")
 
     return atomic_addrs
+
 
 def compile_atomic_data(builder_atomic_map):
     # not trimming anything, will do processing later
@@ -109,8 +113,7 @@ if __name__ == "__main__":
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
 
-    prefetched_blocks = analysis.load_dict_from_json("block_data/all_blocks_30_days.json")
-
+    prefetched_blocks = analysis.load_dict_from_json("block_data/blocks_30_days.json")
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
 

@@ -87,7 +87,7 @@ def get_internal_transfers_in_block(block_number, builder):
     }
     response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
     transfers = response.json()["result"]["transfers"]
-    transfer_map = {tr['hash']: {'from': tr["from"], 'to': tr['to']} for tr in transfers}
+    transfer_map = {tr['hash']: {'from': tr["from"], 'to': tr['to'], 'value': tr["value"]} for tr in transfers}
     return transfer_map
 
 
@@ -98,7 +98,8 @@ def followed_by_transfer_to_builder(fee_recipient, cur_tx, next_tx):
 
 # Given a block and its txs, get all the valid swap txs in that block, check that the swap txs 
 # EITHER contains an internal transfer to builder OR pays in top of block. 
-def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe):
+def analyze_block(block_number, block, builder_swapper_map_tx, builder_swapper_map_vol, 
+                  builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
     # human-readable builder name, derived from extraData 
     builder = searcher_db.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
@@ -118,44 +119,63 @@ def analyze_block(block_number, block, builder_swapper_map, coinbase_bribe, afte
     for swap in all_swaps:
         tx_index = swap['tx_index']
         tx = block["transactions"][tx_index] 
+        tx_volume = swap['user_swap_volume_usd']
         # if bribe via coinbase transfer
         if tx["hash"] in transfer_map.keys(): 
-            builder_swapper_map[builder][transfer_map[tx['hash']]["from"]] += 1
+            builder_swapper_map_tx[builder][transfer_map[tx['hash']]["from"]] += 1
+            builder_swapper_map_vol[builder][transfer_map[tx['hash']]["from"]] += tx_volume
+            builder_swapper_map_coin_bribe[builder][transfer_map[tx['hash']]["from"]] += transfer_map[tx['hash']]["value"]
+
             coinbase_bribe.setdefault(transfer_map[tx['hash']]["from"], []).append({
                 "hash": tx["hash"],
                 "builder": builder,
+                "bribe": transfer_map[tx['hash']]["value"]
             })
         # if followed by a direct transfer to builder
         elif followed_by_transfer_to_builder(fee_recipient, tx, block["transactions"][tx_index + 1]) == True:
             # mev bot collected here will be an EOA
-            builder_swapper_map[builder][tx["from"]] += 1
+            builder_swapper_map_tx[builder][tx["from"]] += 1
+            builder_swapper_map_vol[builder][tx["from"]] += tx_volume
+            builder_swapper_map_coin_bribe[builder][tx["from"]] += block["transactions"][tx_index + 1]["value"]
+            
             after_bribe.setdefault(tx["from"], []).append({
                 "hash": tx["hash"],
                 "builder": builder,
+                "bribe": block["transactions"][tx_index + 1]["value"]
             })
         # if within top of block (first 10%):
         elif swap['tx_index'] <= top_of_block_boundary:
-            builder_swapper_map[builder][tx["to"]] += 1
+            builder_swapper_map_tx[builder][tx["to"]] += 1
+            builder_swapper_map_vol[builder][tx["to"]] += tx_volume
+            builder_swapper_map_gas_bribe[builder][tx["to"]] += tx["gas"] * tx["gasPrice"]
+
             tob_bribe.setdefault(tx["to"], []).append({
                 "hash": tx['hash'],
                 "builder": builder,
                 "index": tx_index,
                 "gas_price": tx['gasPrice'],
+                "gas": tx['gas'],
                 "block_median_gas": median_gas,
             })
         
 
 def analyze_blocks(blocks):
-    builder_swapper_map = defaultdict(lambda: defaultdict(int))
+    builder_swapper_map_tx = defaultdict(lambda: defaultdict(int))
+    builder_swapper_map_vol = defaultdict(lambda: defaultdict(int))
+    builder_swapper_map_coin_bribe = defaultdict(lambda: defaultdict(int))
+    builder_swapper_map_gas_bribe = defaultdict(lambda: defaultdict(int))
+
     coinbase_bribe = {}
     after_bribe = {}
     tob_bribe = {}
     with ThreadPoolExecutor(max_workers=64) as executor:
         # Use the executor to submit the tasks
-        futures = [executor.submit(analyze_block, block_number, block, builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe) for block_number, block in blocks.items()]
+        futures = [executor.submit(analyze_block, block_number, block, builder_swapper_map_tx, 
+                                   builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, 
+                                   coinbase_bribe, after_bribe, tob_bribe) for block_number, block in blocks.items()]
         for future in as_completed(futures):
             pass
-    return builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe
+    return builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
     
 
 # end result: 1) builder swapper map that shows builder: searcher where searchers have submitted more than 5 times
@@ -164,18 +184,26 @@ def analyze_blocks(blocks):
     # lower threshold nets mev bots without adding false positives. 
     # will we include swaps that are actually not MEV, if we lower the threshold? 
 
-def compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe):
+def compile_cefi_defi_data(builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     # trimmed_map = searcher_db.clean_up(builder_swapper_map, 5)
-    analysis.dump_dict_to_json(builder_swapper_map, "non_atomic/after_and_tob_2/builder_nonatomic_map.json")
+    analysis.dump_dict_to_json(builder_swapper_map_tx, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_tx.json")
+    analysis.dump_dict_to_json(builder_swapper_map_vol, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_vol.json")
+    analysis.dump_dict_to_json(builder_swapper_map_coin_bribe, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_coin_bribe.json")
+    analysis.dump_dict_to_json(builder_swapper_map_gas_bribe, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_gas_bribe.json")
 
-    agg = analysis.aggregate_searchers(builder_swapper_map)
-    # trimmed_agg = {k: v for k, v in agg.items() if v >= 5 or k in coinbase_bribe.keys()}
-    analysis.dump_dict_to_json(agg, "non_atomic/after_and_tob_2/nonatomic_searchers_agg.json")
+    agg_tx = analysis.aggregate_searchers(builder_swapper_map_tx)
+    agg_vol = analysis.aggregate_searchers(builder_swapper_map_vol)
+    agg_coin = analysis.aggregate_searchers(builder_swapper_map_coin_bribe)
+    agg_gas = analysis.aggregate_searchers(builder_swapper_map_gas_bribe)
+    analysis.dump_dict_to_json(agg_tx, "non_atomic/vol_after_tob/agg/agg_tx.json")
+    analysis.dump_dict_to_json(agg_vol, "non_atomic/vol_after_tob/agg/agg_vol.json")
+    analysis.dump_dict_to_json(agg_coin, "non_atomic/vol_after_tob/agg/agg_coin.json")
+    analysis.dump_dict_to_json(agg_gas, "non_atomic/vol_after_tob/agg/agg_gas.json")
 
     # bots that are only included when threshold is lower, 
-    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/after_and_tob_2/coinbase_bribe.json")
-    analysis.dump_dict_to_json(after_bribe, "non_atomic/after_and_tob_2/after_bribe.json")
-    analysis.dump_dict_to_json(tob_bribe, "non_atomic/after_and_tob_2/tob_bribe.json")
+    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/vol_after_tob/bribe_specs/coinbase_bribe.json")
+    analysis.dump_dict_to_json(after_bribe, "non_atomic/vol_after_tob/bribe_specs/after_bribe.json")
+    analysis.dump_dict_to_json(tob_bribe, "non_atomic/vol_after_tob/bribe_specs/tob_bribe.json")
 
 
 if __name__ == "__main__":
@@ -186,8 +214,8 @@ if __name__ == "__main__":
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
-    builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(blocks_fetched)
+    builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(blocks_fetched)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 
-    compile_cefi_defi_data(builder_swapper_map, coinbase_bribe, after_bribe, tob_bribe)
+    compile_cefi_defi_data(builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)

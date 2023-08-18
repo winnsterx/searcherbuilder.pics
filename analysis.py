@@ -1,3 +1,4 @@
+import os, time
 import json
 import collections
 import constants
@@ -5,6 +6,7 @@ import analysis
 from collections import defaultdict, Counter
 from itertools import islice
 import visual_analysis
+import fetch_blocks
 
 
 def load_dict_from_json(filename):
@@ -74,9 +76,12 @@ def return_non_mev_bots(bots, dir):
     return {k: v for k, v in bots.items() if k not in etherscan_bots 
             and k not in coinbase_bots and k not in mine_bots}
 
-def remove_atomic_bots(bots):
+def remove_atomic_bots(agg):
     atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
-    return {k: v for k, v in bots.items() if k not in atomic}
+    for addr, _ in agg.items():
+        if addr in atomic.keys():
+            del agg[addr]
+
 
 def return_mev_bots(bots, dir):
     # eliminate known etherscan bots 
@@ -165,26 +170,26 @@ def analyse_gas_bribe_searchers():
 def rid_map_of_small_addrs(map, agg, ):
     trimmed_agg = {k: v for k, v in agg.items() if v >= 100}
     trimmed_map = defaultdict(lambda: defaultdict(int))
-    for builder, searchers in builder_x_map.items():
+    for builder, searchers in map.items():
         for searcher, count in searchers.items():
             if searcher in trimmed_agg.keys():
                 trimmed_map[builder][searcher] = count
     return trimmed_map
 
-def rid_known_entities():
-    all_swaps = load_dict_from_json("non_atomic/after_and_tob/all_nonatomic_searchers_agg.json")
-    rid_labeled = {}
-    rid_all = {}
+def remove_known_entities(agg):
+    for addr, _ in agg.items():
+        if addr in constants.COMMON_CONTRACTS or addr in constants.LABELED_CONTRACTS.values():
+            del agg[addr]
 
-    for addr, count in all_swaps.items():
-        if addr not in constants.COMMON_CONTRACTS:
-            rid_labeled[addr] = count
+def remove_known_entities_and_atomic_bots(agg):
+    res = {}
+    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
+    for addr, count in agg.items():
+        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values() and addr not in atomic.keys():
+            res[addr] = count
+    return res
 
-    for addr, count in rid_labeled.items():
-        if addr not in constants.LABELED_CONTRACTS.values():
-            rid_all[addr] = count
-
-    dump_dict_to_json(rid_all, "non_atomic/after_and_tob/nonatomic_searchers_agg.json")
+            
 
 
 def get_map_in_range(map, agg, threshold):
@@ -208,9 +213,30 @@ def get_map_in_range(map, agg, threshold):
     return filtered_map, top_searchers
 
 
-if __name__ == "__main__":
-    map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
-    agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")
-    sorted_map = {builder: dict(sorted(searchers.items(), key=lambda item: item[1], reverse=True)) for builder, searchers in map.items()}
+def remove_atomic_from_map(map, atomic):
+    nonatomic_map = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for searcher, count in searchers.items():
+            if searcher not in atomic.keys():
+                nonatomic_map[builder][searcher] = count
+    return nonatomic_map
 
-    dump_dict_to_json(rid_map_of_small_addrs(sorted_map, agg), "atomic/smaller_map.json")
+def prune(dir):
+    # prune from agg
+    agg_list = fetch_blocks.prepare_file_list(dir+"/agg")
+    for a in agg_list:
+        agg = load_dict_from_json(a)
+        res = remove_known_entities_and_atomic_bots(agg)
+        dump_dict_to_json(res, dir+"/pruned/agg/"+os.path.basename(a))
+
+
+
+
+if __name__ == "__main__":
+    start = time.time()
+    print("loading blocks now", start)
+    blocks = load_dict_from_json("block_data/blocks_30_days.json")
+    print("finished loading in ", time.time() - start)
+
+    start_block = 17595510 # Jul-01-2023 12:00:11 AM UTC
+    fetch_blocks.count_blocks(blocks, start_block)

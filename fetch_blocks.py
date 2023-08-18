@@ -1,4 +1,4 @@
-import requests, json, time, ijson
+import requests, json, time, ijson, os
 from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -121,9 +121,20 @@ def count_blocks(blocks, start_block):
             print("missing / out of order block number", b, "isnt ", block_num)
             return False
         block_num += 1
-    print("all blocks are in order and present, ending at", block_num - 1)
+    print(f"all {len(blocks)} blocks are in order and present, ending at", block_num - 1)
     return True
 
+def prepare_file_list(dir, keyword="", sort=True):
+    # dir = block_data, no /
+    files = os.listdir(dir)
+    file_list = []
+    for file in files:
+        if keyword in file:
+            file = dir+"/"+file
+            file_list.append(file)
+    if sort: 
+        file_list = sorted(file_list)
+    return file_list
 
 def merge_large_json_files(file_list, output_file):
     with open(output_file, 'w') as outfile:
@@ -147,14 +158,11 @@ def merge_large_json_files(file_list, output_file):
 
 
 if __name__ == "__main__":
-    # start_block = 17595510 # Jul-01-2023 12:00:11 AM UTC
-    # num_blocks = 223200 # 31 * 24 * 60 * 60 / 12
-    # end_block = 17818710 # Aug 1 
+    start_block = 17595510 # Jul-01-2023 12:00:11 AM UTC
+    num_blocks = 223200 # 31 * 24 * 60 * 60 / 12
+    end_block = 17818710 # Aug 1 
 
     # 17,779,790 is where we left off 
-    start_block = 17779791
-    num_blocks = 8000
-    # num_blocks = 38920
 
     blocks = get_blocks(start_block, num_blocks)
     analysis.dump_dict_to_json(blocks, "new_blocks.json")

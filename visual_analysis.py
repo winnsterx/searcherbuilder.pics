@@ -57,10 +57,10 @@ def create_a_flow(map, agg, searcher=None):
     )
 
 
-
 def searcher_builder_orderflow(map, agg, title):
     # Create a figure with a dropdown menu
     fig = make_subplots(specs=[[{'type': 'sankey'}]])
+    return fig
     fig.add_trace(create_a_flow(map, agg))
 
     # Create a dropdown menu with all the searchers and an option for all searchers
@@ -93,17 +93,22 @@ def searcher_builder_orderflow(map, agg, title):
     #     ]
     # )
 
-    # Add layout options
     fig.update_layout(title_text=title, font_size=10)
-
-    # Show the figure
     fig.show()
 
 
 if __name__ == "__main__":
     map = analysis.load_dict_from_json("atomic/builder_atomic_map.json")
     agg = analysis.load_dict_from_json("atomic/atomic_searchers_agg.json")
-
     map, agg = analysis.get_map_in_range(map, agg, 0.9)
 
-    searcher_builder_orderflow(map, agg, "searcher-builder orderflow")
+    searcher_builder_orderflow(map, agg, "atomic searcher-builder orderflow")
+
+    nonatomic_dir = "non_atomic/after_and_tob/"
+    map = analysis.load_dict_from_json(nonatomic_dir + "no_atomic_overlap_map.json")
+    agg = analysis.load_dict_from_json(nonatomic_dir + "no_atomic_overlap_agg.json")
+    map, agg = analysis.get_map_in_range(map, agg, 0.9)
+
+    searcher_builder_orderflow(map, agg, "nonatomic searcher-builder orderflow")
+
+
