@@ -176,18 +176,12 @@ def rid_map_of_small_addrs(map, agg, ):
                 trimmed_map[builder][searcher] = count
     return trimmed_map
 
-def remove_known_entities(agg):
-    res = {}
-    for addr, count in agg.items():
-        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
-            res[addr] = count
-    return res
 
-def remove_known_entities_and_atomic_bots(agg):
+
+def remove_known_entities_and_atomic_bots(agg, atomic_bots):
     res = {}
-    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
     for addr, count in agg.items():
-        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values() and addr not in atomic.keys():
+        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values() and addr not in atomic_bots.keys():
             res[addr] = count
     return res
 
@@ -227,11 +221,11 @@ def remove_atomic_from_map(map, atomic):
 def prune(dir):
     # prune from agg
     agg_list = fetch_blocks.prepare_file_list(dir+"/agg")
+    atomic_bots = load_dict_from_json("atomic/new/agg/agg_vol.json")
     for a in agg_list:
         agg = load_dict_from_json(a)
-        res = remove_known_entities(agg)
-        # res = remove_known_entities_and_atomic_bots(agg)
-        dump_dict_to_json(res, dir+"/pruned/agg/"+os.path.basename(a))
+        res = remove_known_entities_and_atomic_bots(agg, atomic_bots)
+        dump_dict_to_json(res, dir+"/pruned_atomic/agg/"+os.path.basename(a))
 
 
 def aggregate_atomic_searchers(builder_atomic_map):
@@ -245,18 +239,77 @@ def aggregate_atomic_searchers(builder_atomic_map):
     return agg
 
 
+def prune_known_entities_from_agg(agg):
+    res = {}
+    for addr, count in agg.items():
+        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
+            res[addr] = count
+    return res
+
+def prune_known_entities_from_simple_map(map):
+    res = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for addr, count in searchers.items():
+            if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
+                res[builder][addr] = count
+    return res
+
+
+def prune_known_entities_from_atomic_map(map):
+    res = defaultdict(defaultdict(int))
+    for builder, searchers in map.items():
+        for addr, stats in searchers.items():
+            if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
+                res[builder][addr] = stats["total"]
+    return res
+
+def sort_agg(agg):
+    return {k: math.ceil(v) for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
+
+# maps and aggs are pruned of known entities
+def aggregate_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg):
+    total_map = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in atomic_map.items():
+        for searcher, stats in searchers.items():
+            total_map[builder][searcher] += stats["total"]
+    
+    for builder, searchers in nonatomic_map.items():
+        for searcher, stat in searchers.items():
+            total_map[builder][searcher] += stat 
+
+    total_agg = defaultdict(int)
+    for searcher, count in atomic_agg.items():
+        total_agg[searcher] += count
+    for searcher, count in nonatomic_agg.items():
+        total_agg[searcher] += count
+
+    return total_map, total_agg
+
+# total is untrimmed, pruned of known addrs 
+def generate_total_mev_orderflow(metric_type):
+    atomic_map = load_dict_from_json(f'atomic/new/builder_atomic_maps/builder_atomic_map_{metric_type}.json')
+    atomic_agg = load_dict_from_json(f'atomic/new/agg/agg_{metric_type}.json')
+    nonatomic_map = load_dict_from_json(f'nonatomic/new/builder_swapper_maps/builder_swapper_map_{metric_type}.json')
+    nonatomic_agg = load_dict_from_json(f'nonatomic/new/agg/agg_{metric_type}.json')
+
+    total_map, total_agg = aggregate_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg)
+
+    total_map = prune_known_entities_from_simple_map(total_map)
+    total_agg = sort_agg(prune_known_entities_from_agg(total_agg))
+    # important that agg is sorted before going into getmapbyrange
+    range_map, range_agg = get_map_in_range(total_map, total_agg, 0.90)
+    dump_dict_to_json(range_agg, f'95_agg_{metric_type}.json')
+
+    visual_analysis.searcher_builder_orderflow(range_map, range_agg, f'nonatomic + atomic orderflow by {metric_type}')
+    
+
+    
+
+
+
 
 if __name__ == "__main__":
-    nonatomic_dir = "non_atomic/new_vol_after_tob/"
-    nonatomic_map_dir = "builder_swapper_maps/"
-
-    # volume_map = load_dict_from_json(nonatomic_dir + nonatomic_map_dir + "builder_swapper_map_vol.json")
-    # volume_agg = load_dict_from_json(nonatomic_dir + "pruned/agg/agg_vol.json")
-
-    # map, agg = get_map_in_range(volume_map, volume_agg, 0.99)
-    # dump_dict_to_json(agg, nonatomic_dir + "percentile/agg_99.json")
-    # visual_analysis.searcher_builder_orderflow(map, agg, "nonatomic orderflow by volume")
-
-    # agg = load_dict_from_json(nonatomic_dir + "percentile/agg_95.json")    
-    # known, unknown = check_mev_bots(agg)
-    # dump_dict_to_json(unknown, nonatomic_dir+"percentile/unknowns/95.json")
+    generate_total_mev_orderflow("vol")
+    generate_total_mev_orderflow("tx")
+    generate_total_mev_orderflow("gas")
+    generate_total_mev_orderflow("coin")
