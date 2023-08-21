@@ -6,7 +6,7 @@ import analysis
 from collections import defaultdict, Counter
 from itertools import islice
 import visual_analysis
-import fetch_blocks
+import fetch_blocks, chartprep
 
 
 def load_dict_from_json(filename):
@@ -18,53 +18,24 @@ def dump_dict_to_json(dict, filename):
     with open(filename, 'w+') as fp: 
         json.dump(dict, fp)
 
-def aggregate_searchers(builder_searcher_map):
-    searcher_total_interactions = {}
-    for builder, interactions in builder_searcher_map.items():
-        for searcher, frequency in interactions.items():
-            if searcher not in searcher_total_interactions:
-                searcher_total_interactions[searcher] = 0
-            searcher_total_interactions[searcher] += int(frequency)
-    sorted_interactions = {k: v for k, v in sorted(searcher_total_interactions.items(), key=lambda item: item[1], reverse=True)}
-    return sorted_interactions
+def create_agg_from_map(map):
+    agg = {}
+    for _, searchers in map.items():
+        for searcher, count in searchers.items():
+            agg[searcher] = agg.get(searcher, 0) + count
+    return agg
 
-def one_exclusive_relationships(builder_searcher_map, searcher_total_interactions):
-    # examine strictly exclusive relationships
-    exclusive = collections.defaultdict(dict)
-    for builder, interactions in builder_searcher_map.items():
-        for searcher, frequency in interactions.items():
-            if int(frequency) == searcher_total_interactions[searcher]:
-                # found an exclusive relationship
-                exclusive[builder][searcher] = frequency
     
-    return exclusive
         
-def find_joint_between_two_searcher_db(db_one, db_two):
+def find_joint_between_two_aggs(db_one, db_two):
     addr_one = set(db_one.keys())
     addr_two = set(db_two.keys())
     return addr_one & addr_two
 
-def find_only_in_db_one(db_one, db_two):
-    return {k: v for k, v in db_one.items() if k not in db_two.keys()}
 
-def remove_common_addrs(searchers):
-    return {k: v for k, v in searchers.items() if k not in constants.COMMON_CONTRACTS}
+def find_only_in_agg_one(agg_one, agg_two):
+    return {k: v for k, v in agg_one.items() if k not in agg_two.keys()}
 
-def return_common_addrs(searchers):
-    return {k: v for k, v in searchers.items() if k in constants.COMMON_CONTRACTS}
-
-# Checks LIST of bots against Etherscan's MEV Bots, returns lists of known and potential bots
-def check_mev_bots(bots):
-    mev_bots = analysis.load_dict_from_json("searcher_databases/etherscan_searchers.json").keys()
-    known_bots = {}
-    unknown_bots = {}
-    for bot, count in bots.items():
-        if bot in mev_bots:
-            known_bots[bot] = count
-        else:
-            unknown_bots[bot] = count
-    return known_bots, unknown_bots
- 
 
 def return_non_mev_bots(bots, dir):
     # eliminate known etherscan bots 
@@ -76,12 +47,6 @@ def return_non_mev_bots(bots, dir):
     return {k: v for k, v in bots.items() if k not in etherscan_bots 
             and k not in coinbase_bots and k not in mine_bots}
 
-def remove_atomic_bots(agg):
-    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
-    for addr, _ in agg.items():
-        if addr in atomic.keys():
-            del agg[addr]
-
 
 def return_mev_bots(bots, dir):
     # eliminate known etherscan bots 
@@ -91,34 +56,6 @@ def return_mev_bots(bots, dir):
     # eliminate bots that i labeled
     # mine_bots = load_dict_from_json("searcher_databases/mine_searchers.json").keys()
     return {k: v for k, v in bots.items() if k in etherscan_bots or k in coinbase_bots}
-
-
-
-def compare_two_thresholds(lower, higher, lower_dir, higher_dir): 
-    # calculate how many bots are known in lower and higher
-    bots_only_in_lower = find_only_in_db_one(lower, higher)
-    mev_in_lower = return_mev_bots(lower, lower_dir)
-    mev_only_in_lower = return_mev_bots(bots_only_in_lower, lower_dir)
-    mev_in_higher = return_mev_bots(higher, higher_dir)
-    print(f"{len(mev_in_lower)} bots are known MEV bots in lower gas fee range.")
-    print(f"{len(mev_in_higher)} bots are known MEV bots in higher gas fee range.")
-    # compare number of results, which could increase efficiency
-    print(f"{len(lower)} bots are found in a lower threshold, and {len(higher)} bots found in higher threshold")
-    print(f"Within these additional {len(bots_only_in_lower)} bots captured by this lower threshold, {len(mev_only_in_lower)} bots are known MEV bots")
-
-
-
-def create_agg_from_bribes(dir):
-    new_cefi_searcher_agg = defaultdict(int)
-    coinbase_bribes = load_dict_from_json(dir + "/coinbase_bribes.json")
-    priority_bribes = load_dict_from_json(dir + "/cefi_bots_in_higher_gas.json")
-
-    for searcher, txs in coinbase_bribes.items():
-        new_cefi_searcher_agg[searcher] += len(txs)
-    for searcher, txs in priority_bribes.items():
-        new_cefi_searcher_agg[searcher] += len(txs)
-    
-    return {k: v for k, v in new_cefi_searcher_agg.items() if v >= 5 or k in coinbase_bribes.keys()}
 
 
 def analyse_top_x(searchers, x):
@@ -177,19 +114,44 @@ def rid_map_of_small_addrs(map, agg, ):
     return trimmed_map
 
 
-
-def remove_known_entities_and_atomic_bots(agg, atomic_bots):
+def remove_known_entities_from_agg(agg):
     res = {}
     for addr, count in agg.items():
-        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values() and addr not in atomic_bots.keys():
+        if addr not in constants.COMMON_CONTRACTS and addr not in constants.LABELED_CONTRACTS.values():
             res[addr] = count
     return res
 
-            
+
+def return_atomic_maps_with_only_type(map, type):
+    res = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for searcher, stats in searchers.items():
+            res[builder][searcher] = stats[type]
+    return res
+
+def remove_small_builders(map, agg, min_count):
+    res = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        builder_total_count = sum(searchers.values())
+        if builder_total_count > min_count: 
+            res[builder] = searchers
+        else:
+            for searcher, count in searchers.items():
+                if searcher in agg:
+                    agg[searcher] -= count
+        
+    return res, agg
+
+
+
+
 
 # agg is all the searchers, sans known entities
 # map is all the fields
-def get_map_in_range(map, agg, threshold):
+def get_map_and_agg_in_range(map, agg, threshold):
+    # must sort agg first to get accurate top searchers 
+    agg = sort_agg(agg)
+
     total_count = sum(agg.values())
     threshold = total_count * threshold
 
@@ -206,8 +168,15 @@ def get_map_in_range(map, agg, threshold):
     filtered_map = {}
     for builder, searchers in map.items():
         filtered_map[builder] = {searcher: tx_count for searcher, tx_count in searchers.items() if searcher in top_searchers}
-
     return filtered_map, top_searchers
+
+
+def remove_atomic_from_agg(agg, atomic):
+    res = {}
+    for addr, count in agg.items():
+        if addr not in atomic:
+            res[addr] = count
+    return res
 
 
 def remove_atomic_from_map(map, atomic):
@@ -218,14 +187,16 @@ def remove_atomic_from_map(map, atomic):
                 nonatomic_map[builder][searcher] = count
     return nonatomic_map
 
-def prune(dir):
+
+def prune(dir, is_atomic):
     # prune from agg
     agg_list = fetch_blocks.prepare_file_list(dir+"/agg")
-    atomic_bots = load_dict_from_json("atomic/new/agg/agg_vol.json")
     for a in agg_list:
         agg = load_dict_from_json(a)
-        res = remove_known_entities_and_atomic_bots(agg, atomic_bots)
-        dump_dict_to_json(res, dir+"/pruned_atomic/agg/"+os.path.basename(a))
+        res = remove_known_entities_from_agg(agg)
+        if is_atomic == False:
+            res = remove_atomic_from_agg(res, load_dict_from_json("atomic/new/agg/agg_vol.json"))
+        dump_dict_to_json(res, dir+"/pruned/agg/"+os.path.basename(a))
 
 
 def aggregate_atomic_searchers(builder_atomic_map):
@@ -264,7 +235,14 @@ def prune_known_entities_from_atomic_map(map):
     return res
 
 def sort_agg(agg):
-    return {k: math.ceil(v) for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
+    return {k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
+
+def sort_map(map):
+    map = {outer_key: {inner_key: count for inner_key, count in sorted(inner_dict.items(), key=lambda item: item[1], reverse=True)} for outer_key, inner_dict in map.items()}
+    builder_totals = {builder: sum(searchers.values()) for builder, searchers in map.items()}
+    builder_totals = sorted(builder_totals.keys(), key=lambda builder: builder_totals[builder], reverse=True)  
+    sorted_map = {builder: map[builder] for builder in builder_totals}
+    return sorted_map
 
 # maps and aggs are pruned of known entities
 def aggregate_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg):
@@ -285,6 +263,8 @@ def aggregate_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map
 
     return total_map, total_agg
 
+
+
 # total is untrimmed, pruned of known addrs 
 def generate_total_mev_orderflow(metric_type):
     atomic_map = load_dict_from_json(f'atomic/new/builder_atomic_maps/builder_atomic_map_{metric_type}.json')
@@ -297,19 +277,42 @@ def generate_total_mev_orderflow(metric_type):
     total_map = prune_known_entities_from_simple_map(total_map)
     total_agg = sort_agg(prune_known_entities_from_agg(total_agg))
     # important that agg is sorted before going into getmapbyrange
-    range_map, range_agg = get_map_in_range(total_map, total_agg, 0.90)
+    range_map, range_agg = get_map_and_agg_in_range(total_map, total_agg, 0.90)
     dump_dict_to_json(range_agg, f'95_agg_{metric_type}.json')
 
     visual_analysis.searcher_builder_orderflow(range_map, range_agg, f'nonatomic + atomic orderflow by {metric_type}')
     
 
-    
 
+def create_searcher_builder_map(map):
+    res = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for searcher, count in searchers.items():
+            res[searcher][builder] += count
+    res = sort_map(res)
+    return res
 
 
 
 if __name__ == "__main__":
-    generate_total_mev_orderflow("vol")
-    generate_total_mev_orderflow("tx")
-    generate_total_mev_orderflow("gas")
-    generate_total_mev_orderflow("coin")
+    # nonatomic_map = sort_map(load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))
+    # nonatomic_agg = load_dict_from_json("nonatomic/new/agg/agg_vol.json")
+    # nonatomic_map, nonatomic_agg = get_map_and_agg_in_range(nonatomic_map, nonatomic_agg, 0.95)
+    # nonatomic_map, nonatomic_agg = analysis.remove_small_builders(nonatomic_map, nonatomic_agg, 1000)
+    # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
+    
+    # nonatomic_fig.show()
+
+    prune("atomic/new", True)
+
+    # searcher_flow = {}
+    # for builder, searchers in nonatomic_map.items():
+    #     for searcher, count in searchers.items():
+    #         searcher_flow[searcher] = searcher_flow.get(searcher, 0) + count
+
+    # for searcher, count in nonatomic_agg.items():
+    #     if searcher_flow[searcher] != count:
+    #         print("not the same!", searcher, count, searcher_flow[searcher])
+
+
+    # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")

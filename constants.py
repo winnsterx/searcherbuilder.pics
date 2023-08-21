@@ -19,6 +19,7 @@ BEE = "0x3bee5122e2a2fbe11287aafb0cb918e22abb5436"
 EDEN = "0xaab27b150451726ec7738aa1d0a94505c8729bd1"
 LIGHTSPEEDBUILDER_2 = "0xd2090025857b9c7b24387741f120538e928a3a59"
 LIGHTSPEEDBUILDER_1 = "0x7316b4e0f0d4b19b4ac13895224cd522d785e51d"
+ANTBUILDER = "0xc9d945721ed37c6451e457b3c7f1e0cec42417fb"
 THREETHREES = "0x333333f332a06ecb5d20d35da44ba07986d6e203"
 LIDO = "0x388c818ca8b9251b393131c08a736a67ccb19297"
 STAKEFISH = "0xffee087852cb4898e6c3532e776e68bc68b1143b"
@@ -312,8 +313,9 @@ extraData_mapping = {
     "gambit": "gambitlabs",
     "bobthebuilder": "bobthebuilder",
     "nfactorial": "nfactorial",
+    "antbuilder": "antbuilder",
     "linux": "vanilla_builders",
-    "nethermind": "vanilla_builders"
+    "nethermind": "vanilla_builders",
 }
 
 BLOCK_BUILDER_MAP_FILE = "block_to_builder.json"
