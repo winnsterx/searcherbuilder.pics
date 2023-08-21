@@ -7,10 +7,6 @@ import constants
 import analysis
 import nonatomic_mev
 
-# global variable that maps builder to searchers
-atomic_addrs = defaultdict(lambda: defaultdict(int))
-swap_addrs = defaultdict(lambda: defaultdict(int))
-
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known router, dex, etc
 def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):

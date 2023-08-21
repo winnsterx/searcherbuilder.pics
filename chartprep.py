@@ -61,11 +61,11 @@ def create_searcher_builder_sankey(map, agg, title, unit):
                                ), autosize=False, width=800, height=1500)
     return fig 
 
-def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, is_atomic):
+def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, mev_domain):
     # map, agg are non sorted, native maps from atomic or nonatomic
-    if is_atomic:
+    if mev_domain == "atomic":
         map = analysis.return_atomic_maps_with_only_type(map, "total")
-    else:
+    elif mev_domain == "nonatomic":
         atomic = analysis.load_dict_from_json(f"atomic/new/agg/agg_{metric}.json")
         agg = analysis.remove_atomic_from_agg(agg, atomic)
         map = analysis.remove_atomic_from_map(map, atomic)
@@ -76,22 +76,34 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, is_ato
     return map, agg
 
 
-if __name__ == "__main__":
-    nonatomic_map = analysis.sort_map(analysis.load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))
-    nonatomic_agg = analysis.load_dict_from_json("nonatomic/new/agg/agg_vol.json")
-    nonatomic_map, nonatomic_agg = prune_map_and_agg_for_sankey(nonatomic_map, nonatomic_agg, "vol", 0.9, 1000, False)
-    analysis.dump_dict_to_json(nonatomic_map, "used_map.json")
-    analysis.dump_dict_to_json(nonatomic_agg, "used_agg.json")
-    nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
-
-    atomic_map = analysis.load_dict_from_json("atomic/new/builder_atomic_maps/builder_atomic_map_tx.json")
-    atomic_agg = analysis.load_dict_from_json("atomic/new/agg/agg_tx.json")
-    atomic_map, atomic_agg = prune_map_and_agg_for_sankey(atomic_map, atomic_agg, "tx", 0.9, 5, True)
+def create_three_sankeys_by_metric(metric, unit, percentile, min_count):
+    nonatomic_map = analysis.load_dict_from_json(f"nonatomic/new/builder_swapper_maps/builder_swapper_map_{metric}.json")
+    nonatomic_agg = analysis.load_dict_from_json(f"nonatomic/new/agg/agg_{metric}.json")
+    atomic_map = analysis.load_dict_from_json(f"atomic/new/builder_atomic_maps/builder_atomic_map_{metric}.json")
+    atomic_agg = analysis.load_dict_from_json(f"atomic/new/agg/agg_{metric}.json")
+    combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg)
+    analysis.dump_dict_to_json(combined_map, "combined_bribe_map.json")
+    analysis.dump_dict_to_json(combined_agg, "combined_bribe_agg.json")
+    atomic_map, atomic_agg = prune_map_and_agg_for_sankey(atomic_map, atomic_agg, metric, percentile, min_count, "atomic")
     atomic_map = analysis.sort_map(atomic_map)
-    atomic_fig = create_searcher_builder_sankey(atomic_map, atomic_agg, "Atomic Searcher-Builder Orderflow by Tx Count (USD, last month)", "txs")
+    atomic_fig = create_searcher_builder_sankey(atomic_map, atomic_agg, f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
 
+    nonatomic_map, nonatomic_agg = prune_map_and_agg_for_sankey(nonatomic_map, nonatomic_agg, metric, percentile, min_count, "nonatomic")
+    nonatomic_map = analysis.sort_map(nonatomic_map)
+    nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
 
-    title = "# <p style='text-align: center;margin:0px;'> __Searcher Transparency Dashboard__ </p>"
+    combined_map, combined_agg = prune_map_and_agg_for_sankey(combined_map, combined_agg, metric, 0.9, 5, "combined")
+    combined_map = analysis.sort_map(combined_map)
+    combined_fig = create_searcher_builder_sankey(combined_map, combined_agg, f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
+
+    return atomic_fig, nonatomic_fig, combined_fig
+
+if __name__ == "__main__":
+    atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric("vol", "USD", 0.9, 1000)
+    atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric("tx", "tx count", 0.9, 5)
+    atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric("bribe", "ETH", 0.9, 5)
+
+    title = "# <p style='text-align: center;margin:0px;'> __Searcher Builder Activity Dashboard__ </p>"
     head =  '<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '\
             +'<a href="https://twitter.com/winnsterx">winnsterx</a></div>'\
             +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on Github'\
@@ -102,20 +114,70 @@ if __name__ == "__main__":
         dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            nonatomic_fig,
-            atomic_fig
         ]),
         dp.Page(title="Volume", blocks=[
-            nonatomic_fig,
-            atomic_fig
+            title, 
+            head, 
+            atomic_fig_vol,
+            nonatomic_fig_vol, 
+            combined_fig_vol
         ]),
         dp.Page(title="Number of Txs", blocks=[
-            nonatomic_fig,
-            atomic_fig
+            title, 
+            head, 
+            atomic_fig_tx,
+            nonatomic_fig_tx,
         ]),
         dp.Page(title="Bribes", blocks=[
-            nonatomic_fig,
-            atomic_fig
+            title, 
+            head, 
+            atomic_fig_bribe,
+            nonatomic_fig_bribe,
+            combined_fig_bribe,
         ])
     )
     dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")
+
+    fixedposi = "<style>nav.min-h-screen {position: -webkit-sticky;position: sticky;}</style>"
+
+    more_css = '''
+        <style>
+        
+        body {
+            max-width: 900px;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            background: #eee;
+        }
+        @media screen and (min-width: 700px) {
+            body {
+                max-width: 1000px;
+            }
+        }
+        
+        a.pt-1 {
+            position: sticky;
+            top:0%;
+            font-size: 1.4rem;
+            padding-top: 1.2rem !important;
+            padding-bottom: 1.2rem !important;
+        }
+
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 99999;
+            background-color: white;
+            display: flex;
+            margin-bottom: 1.5rem;
+        }
+                
+        </style>
+    '''
+
+    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "r") as file:
+        f = file.read()
+    OG_STUFF = ' <title>searcherbuilder.pics | Searcher Builder Dashboard</title>\n<meta charset="UTF-8" />\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:site" content="@winnsterx">\n<meta name="twitter:title" content="Searcher Builder Dashboard">\n<meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">\n<meta name="twitter:image" content="https://www.searcherbuilder.pics/">\n<meta property="og:title" content=Searcher Builder Dashboard>\n<meta property="og:site_name" content=searcherbuilder.pics>\n<meta property="og:url" content=searcherbuilder.pics>\n<meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum." >\n<meta property="og:type" content=website>\n<link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />\n<meta property="og:image" content=https://mevboost.toniwahrstaetter.com/pv.png>\n<meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">\n<meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">\n <meta name="author" content="Toni Wahrstätter">'
+    f = f.replace('<meta charset="UTF-8" />\n', fixedposi+ OG_STUFF+more_css) # + GA
+    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "w") as file:
+        file.write(f)
