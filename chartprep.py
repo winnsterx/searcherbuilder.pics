@@ -14,7 +14,8 @@ def abbreviate_label(label):
 def create_searcher_builder_sankey(map, agg, title, unit):
     # nodes is index of searcher + builder, each unique
     # an entity will now be recognized as the index from this list now
-    span = '<span style="font-size: 24px;font-weight:bold;">{}</span>'     
+    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;">(from {} to {})</span></span>'     
+    # span = "<span style=&quot;font-size: 24px;font-weight:bold;&quot;>MEV-Boost Block Flow<br /><span style='font-size:14px;'>(last 30 days)</span></span>"
     searcher_builder_map = analysis.create_searcher_builder_map(map)
     # nodes = sorted_searchers + list(map.keys())
     nodes = list(agg.keys()) + list(map.keys())
@@ -34,6 +35,7 @@ def create_searcher_builder_sankey(map, agg, title, unit):
 
     fig = go.Figure(data=go.Sankey(
         arrangement='snap',
+        textfont=go.sankey.Textfont(size=16, color="black", family="Courier New"),
         node = dict(
             x = x_coors,
             y = y_coors,
@@ -47,18 +49,18 @@ def create_searcher_builder_sankey(map, agg, title, unit):
             source = source_indices,
             target = target_indices,
             value = values,            
-            hovertemplate='<b>%{source.value:,.0f} <br /><b>'+unit,  
+            hovertemplate='<b>total: %{source.value:,.0f} <br /><b>'+unit,  
         )
     ))
 
-    fig.update_layout(title_text=span.format(title),
+    fig.update_layout(title_text=span.format(title, "7/1", "8/1"),
                       font_size=16,
-                      paper_bgcolor='#eee',
+                    #   paper_bgcolor='#eee',
                       font=dict(
                                 family="Courier New, monospace",
-                                size=20,  # Set the font size here
+                                # size=20,  # Set the font size here
                                 color="black"
-                               ), autosize=False, width=800, height=1500)
+                               ), autosize=True, width=800, height=1200, margin=dict(t=100, b=100, l=50, r=50))
     return fig 
 
 def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, mev_domain):
@@ -82,33 +84,35 @@ def create_three_sankeys_by_metric(metric, unit, percentile, min_count):
     atomic_map = analysis.load_dict_from_json(f"atomic/new/builder_atomic_maps/builder_atomic_map_{metric}.json")
     atomic_agg = analysis.load_dict_from_json(f"atomic/new/agg/agg_{metric}.json")
     combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg)
-    analysis.dump_dict_to_json(combined_map, "combined_bribe_map.json")
-    analysis.dump_dict_to_json(combined_agg, "combined_bribe_agg.json")
+
     atomic_map, atomic_agg = prune_map_and_agg_for_sankey(atomic_map, atomic_agg, metric, percentile, min_count, "atomic")
     atomic_map = analysis.sort_map(atomic_map)
-    atomic_fig = create_searcher_builder_sankey(atomic_map, atomic_agg, f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
+    atomic_fig = create_searcher_builder_sankey(atomic_map, atomic_agg, f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit)
 
     nonatomic_map, nonatomic_agg = prune_map_and_agg_for_sankey(nonatomic_map, nonatomic_agg, metric, percentile, min_count, "nonatomic")
     nonatomic_map = analysis.sort_map(nonatomic_map)
-    nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
+    nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit)
 
     combined_map, combined_agg = prune_map_and_agg_for_sankey(combined_map, combined_agg, metric, 0.9, 5, "combined")
     combined_map = analysis.sort_map(combined_map)
-    combined_fig = create_searcher_builder_sankey(combined_map, combined_agg, f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit}, last month)", unit)
+    combined_fig = create_searcher_builder_sankey(combined_map, combined_agg, f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit)
 
     return atomic_fig, nonatomic_fig, combined_fig
 
 if __name__ == "__main__":
-    atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric("vol", "USD", 0.9, 1000)
+    atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric("vol", "USD", 0.9, 5000)
     atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric("tx", "tx count", 0.9, 5)
     atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric("bribe", "ETH", 0.9, 5)
 
-    title = "# <p style='text-align: center;margin:0px;'> __Searcher Builder Activity Dashboard__ </p>"
-    head =  '<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '\
-            +'<a href="https://twitter.com/winnsterx">winnsterx</a></div>'\
-            +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on Github'\
-            +'<a href="https://github.com/winnsterx/searcher_database>Github</a></div></div>'
-    
+    title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
+    head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
+                +'<div style ="float:right;font-size:18px;color:#0F1419">View <a href="./data.html">raw data</a> </div></div>'
+                +'<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
+                +'<a href="https://twitter.com/nero_eth">winnsterx</a> & inspired by '
+                +'<a href="https://mevboost.pics">mevboost.pics</a> by <a href="https://twitter.com/nero_eth">Toni</a></div>'
+                +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
+                +"\n")
+
     # atomic_fig.show()
     view = dp.Blocks(
         dp.Page(title="Highlights", blocks=[
@@ -120,7 +124,7 @@ if __name__ == "__main__":
             head, 
             atomic_fig_vol,
             nonatomic_fig_vol, 
-            combined_fig_vol
+            # combined_fig_vol
         ]),
         dp.Page(title="Number of Txs", blocks=[
             title, 
@@ -155,12 +159,28 @@ if __name__ == "__main__":
             }
         }
         
+
+
         a.pt-1 {
             position: sticky;
             top:0%;
             font-size: 1.4rem;
             padding-top: 1.2rem !important;
             padding-bottom: 1.2rem !important;
+        }
+
+        nav div, nav div.hidden {
+            margin: 0 0 0 0;
+            width: 100%;
+            justify-content: space-evenly;
+        }
+        main div.px-4 {
+            background: #eee;
+        }
+
+        .flex {
+            width: 100%; 
+            justify-content: space-evenly;
         }
 
         nav {
