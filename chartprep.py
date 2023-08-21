@@ -4,7 +4,12 @@ from datetime import datetime
 import analysis 
 import visual_analysis
 
-columns = ['sepalLength', 'sepalWidth', 'petalLength', 'petalWidth', 'species']
+def abbreviate_label(label):
+    if label.startswith("0x"):
+        return label[:9] + '...' if len(label) > 10 else label
+    else: 
+        return label
+
 
 def create_searcher_builder_sankey(map, agg, title, unit):
     # nodes is index of searcher + builder, each unique
@@ -13,6 +18,7 @@ def create_searcher_builder_sankey(map, agg, title, unit):
     searcher_builder_map = analysis.create_searcher_builder_map(map)
     # nodes = sorted_searchers + list(map.keys())
     nodes = list(agg.keys()) + list(map.keys())
+    abbreviated_nodes = [abbreviate_label(node) for node in nodes]
     source_indices = []
     target_indices = [] 
     values = []
@@ -22,46 +28,19 @@ def create_searcher_builder_sankey(map, agg, title, unit):
             source_indices.append(nodes.index(searcher))
             target_indices.append(nodes.index(builder))
             values.append(count)
-    analysis.dump_dict_to_json(nodes, "nodes.json")
 
-    analysis.dump_dict_to_json(source_indices, "source.json")
-    analysis.dump_dict_to_json(target_indices, "target.json")
-    analysis.dump_dict_to_json(values, "value.json")
-    x_coors = [0.001] * len(agg.keys()) + [0.999] * len(map.keys())
-    # turns out u dont actually need all this calculation. just do over estimate, the library will go for the minimal space
-    # total = sum(agg.values())
-    # y_coors = [0.001]
-    # cur = 0
-    # for i, (searcher, count) in enumerate(agg.items()):
-    #     if i == 0:
-    #         cur += count
-    #     else:
-    #         y_coor = cur / total - 0.5 # 0.5 to minus all the extra space
-    #         y_coors.append(y_coor)
-    #         cur += count
-
-    # y_coors_builder = [0.001]
-    # cur = 0
-    # for i, (builder, searchers) in enumerate(map.items()):
-    #     builder_total = sum(searchers.values())
-    #     if i == 0:
-    #         cur += builder_total
-    #     else:
-    #         y_coor = cur / total - 0.5
-    #         y_coors_builder.append(y_coor)
-    #         cur += builder_total
-
-    y_total = [0.01] * len(agg) + [0.01] * len(map)
+    x_coors = [0.001] * len(agg) + [0.999] * len(map)
+    y_coors = [0.01] * len(agg) + [0.01] * len(map)
 
     fig = go.Figure(data=go.Sankey(
         arrangement='snap',
         node = dict(
             x = x_coors,
-            y = y_total,
+            y = y_coors,
             pad = 20,
             thickness = 20,
             line = dict(color = "black", width = 0.5),      
-            label = nodes,  
+            label = abbreviated_nodes,  
             hovertemplate='<b>%{label}<b><br />%{value}'+unit,
         ),
         link = dict(
@@ -98,17 +77,17 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, is_ato
 
 
 if __name__ == "__main__":
-    # nonatomic_map = analysis.sort_map(analysis.load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))
-    # nonatomic_agg = analysis.load_dict_from_json("nonatomic/new/agg/agg_vol.json")
-    # nonatomic_map, nonatomic_agg = prune_map_and_agg_for_sankey(nonatomic_map, nonatomic_agg, "vol", 0.95, 1000, False)
-    # nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
+    nonatomic_map = analysis.sort_map(analysis.load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))
+    nonatomic_agg = analysis.load_dict_from_json("nonatomic/new/agg/agg_vol.json")
+    nonatomic_map, nonatomic_agg = prune_map_and_agg_for_sankey(nonatomic_map, nonatomic_agg, "vol", 0.9, 1000, False)
+    analysis.dump_dict_to_json(nonatomic_map, "used_map.json")
+    analysis.dump_dict_to_json(nonatomic_agg, "used_agg.json")
+    nonatomic_fig = create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
 
     atomic_map = analysis.load_dict_from_json("atomic/new/builder_atomic_maps/builder_atomic_map_tx.json")
     atomic_agg = analysis.load_dict_from_json("atomic/new/agg/agg_tx.json")
-    atomic_map, atomic_agg = prune_map_and_agg_for_sankey(atomic_map, atomic_agg, "tx", 0.95, 5, True)
+    atomic_map, atomic_agg = prune_map_and_agg_for_sankey(atomic_map, atomic_agg, "tx", 0.9, 5, True)
     atomic_map = analysis.sort_map(atomic_map)
-    analysis.dump_dict_to_json(atomic_map, "map_used.json")
-    analysis.dump_dict_to_json(atomic_agg, "agg_used.json")
     atomic_fig = create_searcher_builder_sankey(atomic_map, atomic_agg, "Atomic Searcher-Builder Orderflow by Tx Count (USD, last month)", "txs")
 
 
@@ -120,14 +99,22 @@ if __name__ == "__main__":
     
     # atomic_fig.show()
     view = dp.Blocks(
-        dp.Page(title="General", blocks=[
+        dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            # nonatomic_fig,
+            nonatomic_fig,
             atomic_fig
         ]),
         dp.Page(title="Volume", blocks=[
-            # nonatomic_fig,
+            nonatomic_fig,
+            atomic_fig
+        ]),
+        dp.Page(title="Number of Txs", blocks=[
+            nonatomic_fig,
+            atomic_fig
+        ]),
+        dp.Page(title="Bribes", blocks=[
+            nonatomic_fig,
             atomic_fig
         ])
     )
