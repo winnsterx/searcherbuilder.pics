@@ -201,7 +201,7 @@ def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
 
     fig.update_layout(
         title=title,
-        xaxis_title="Percentage of {unit}".format(unit="Volume" if metric=="vol" else metric.capitalize()),
+        xaxis_title="Percentage of {unit}".format(unit="Transactions" if metric=="tx" else metric.capitalize()),
         yaxis_title="",
         xaxis_range=[0, 100],
         barmode="stack",
@@ -236,6 +236,7 @@ def create_three_bar_charts_by_metric(metric, unit):
 
     combined_agg = analysis.sort_agg(combined_agg)
     combined_map = analysis.sort_map(combined_map)
+    combined_map, combined_agg = analysis.prune_known_entities_from_map_and_agg(combined_map, combined_agg)
     combined_fig = create_searcher_builder_percentage_bar_chart(combined_map, combined_agg, f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
 
     return atomic_fig, nonatomic_fig, combined_fig
@@ -248,7 +249,7 @@ if __name__ == "__main__":
     atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric("bribe", "ETH", 0.95, 5)
 
     atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric("vol", "USD")
-
+    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric("tx", "Transaction Count")
 
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
     head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
@@ -259,24 +260,23 @@ if __name__ == "__main__":
                 +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
                 +"\n")
 
-    num_atomic, num_nonatomic, atomic_tot_vol, nonatomic_tot_vol, atomic_tot_tx, nonatomic_tot_tx = calculate_highlight_figures()
+    # num_atomic, num_nonatomic, atomic_tot_vol, nonatomic_tot_vol, atomic_tot_tx, nonatomic_tot_tx = calculate_highlight_figures()
     # atomic_fig.show()
     view = dp.Blocks(
         dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            dp.Group(
-              dp.BigNumber(heading="Number of Atomic Searchers", value=num_atomic),
-              dp.BigNumber(heading="Number of Atomic MEV Transactions", value=atomic_tot_tx),
-              dp.BigNumber(heading="Total Volume from Atomic MEV (USD)", value=atomic_tot_vol),
-              dp.BigNumber(heading="Number of Cefi-Defi Arb Searchers", value=num_nonatomic),
-              dp.BigNumber(heading="Number of Cefi-Defi Arb Transactions", value=nonatomic_tot_tx),
-              dp.BigNumber(heading="Total Volume of Cefi-Defi Arb (USD)", value=nonatomic_tot_vol),
-              columns=3
-            ),
-            combined_bar_vol,
-            atomic_bar_vol,
-            nonatomic_bar_vol,
+            # dp.Group(
+            #   dp.BigNumber(heading="Number of Atomic Searchers", value=num_atomic),
+            #   dp.BigNumber(heading="Total Atomic MEV Txs", value=atomic_tot_tx),
+            #   dp.BigNumber(heading="Total Volume from Atomic MEV", value=f"${atomic_tot_vol}"),
+            #   dp.BigNumber(heading="Number of Cefi-Defi Arb Searchers", value=num_nonatomic),
+            #   dp.BigNumber(heading="Total Cefi-Defi Arb Txs", value=nonatomic_tot_tx),
+            #   dp.BigNumber(heading="Total Volume of Cefi-Defi Arb", value=f"${nonatomic_tot_vol}"),
+            #   columns=3
+            # ),
+            # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
+            atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
             atomic_fig_tx,
             nonatomic_fig_vol,
             combined_fig_bribe,
