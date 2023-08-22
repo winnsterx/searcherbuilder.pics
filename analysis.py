@@ -149,6 +149,22 @@ def get_map_and_agg_in_range(map, agg, threshold):
     return filtered_map, top_searchers
 
 
+def get_agg_in_range(agg, threshold):
+    agg = sort_agg(agg)
+
+    total_count = sum(agg.values())
+    threshold = total_count * threshold
+
+    # Find the top searchers with a collective transaction count >50%
+    running_total = 0
+    top_searchers = {}
+    for searcher, count in agg.items():
+        running_total += agg[searcher]
+        top_searchers[searcher] = count
+        if running_total > threshold:
+            break
+    return top_searchers
+
 def remove_atomic_from_agg(agg, atomic):
     res = {}
     for addr, count in agg.items():
@@ -272,7 +288,7 @@ def create_agg_from_map(map):
 
 def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
     wei_per_eth = 10**18 
-    
+
     if is_atomic:
         res = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
         for builder, searchers in gas_map.items():
@@ -313,6 +329,26 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
 
     return res, agg
     
+
+def humanize_number(value, fraction_point=1):
+    powers = [10 ** x for x in (12, 9, 6, 3, 0)]
+    human_powers = ('T', 'B', 'M', 'K', '')
+    is_negative = False
+    if not isinstance(value, float):
+        value = float(value)
+    if value < 0:
+        is_negative = True
+        value = abs(value)
+    for i, p in enumerate(powers):
+        if value >= p:
+            return_value = str(round(value / (p / (10.0 ** fraction_point))) /
+                               (10 ** fraction_point)) + human_powers[i]
+            break
+    if is_negative:
+        return_value = "-" + return_value
+
+    return return_value
+
 
 
 if __name__ == "__main__":

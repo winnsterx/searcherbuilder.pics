@@ -23,12 +23,25 @@ ANTBUILDER = "0xc9d945721ed37c6451e457b3c7f1e0cec42417fb"
 THREETHREES = "0x333333f332a06ecb5d20d35da44ba07986d6e203"
 LIDO = "0x388c818ca8b9251b393131c08a736a67ccb19297"
 STAKEFISH = "0xffee087852cb4898e6c3532e776e68bc68b1143b"
+UWUBUILDER = "0xd0d0ce5c067eeea7487ca11153247905364eeb12"
+
+KNOWN_BUILDER_MAPPING = {
+    LIDO: "Lido",
+    STAKEFISH: "Stakefish",
+    ANTBUILDER: "antbuilder",
+    UWUBUILDER: "uwu.builder"
+}
 
 # Searchers 
 JUMP = "0x9507c04b10486547584c37bcbd931b2a4fee9a41"
-JARED_ACCOUNT = "0xae2fc483527b8ef99eb5d9b44875f005ba1fae13" 
 JARED_CONTRACT = "0x6b75d8af000000e20b7a7ddf000ba900b4009a80"
+SYMBOLIC_CAPITAL_PARTNER = "0xa69babef1ca67a37ffaf7a485dfff3382056e78c"
 
+KNOWN_SEARCHERS_MAPPING = {
+    JUMP: "Jump Trading",
+    JARED_CONTRACT: "jaredfromsubway.eth",
+    SYMBOLIC_CAPITAL_PARTNER: "Symbolic Capital Partners"
+}
 
 # Common contracts that ppl interact with
 # huge help from https://dune.com/queries/2614931/4346999
@@ -316,6 +329,9 @@ extraData_mapping = {
     "antbuilder": "antbuilder",
     "linux": "vanilla_builders",
     "nethermind": "vanilla_builders",
+    "geth": "vanilla_builders",
+    "uwu": "uwu.builders",
+    "antbuilder": "antbuilder"
 }
 
 BLOCK_BUILDER_MAP_FILE = "block_to_builder.json"
