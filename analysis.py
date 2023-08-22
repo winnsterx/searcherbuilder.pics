@@ -203,6 +203,11 @@ def aggregate_atomic_searchers(builder_atomic_map):
     agg = {k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
     return agg
 
+def prune_known_entities_from_map_and_agg(map, agg):
+    agg = prune_known_entities_from_agg(agg)
+    map = prune_known_entities_from_simple_map(map)
+    return map, agg
+
 
 def prune_known_entities_from_agg(agg):
     res = {}

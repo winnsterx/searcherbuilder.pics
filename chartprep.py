@@ -1,22 +1,31 @@
 import datapane as dp
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 import math, humanize
 import analysis 
 import visual_analysis
 import constants
+from collections import defaultdict
 
-def abbreviate_label(label):
+
+def abbreviate_label(label, short=False):
+    res = ""
     if label.startswith("0x"):
         if label in constants.KNOWN_SEARCHERS_MAPPING:
-            return constants.KNOWN_SEARCHERS_MAPPING[label] + "(" + label[:9] + ")"
+            res = constants.KNOWN_SEARCHERS_MAPPING[label]
+            if short == False:
+                res += " (" + label[:9] + ")"
+            return res
         elif label in constants.KNOWN_BUILDER_MAPPING:
-            return constants.KNOWN_BUILDER_MAPPING[label] + "(" + label[:9] + ")"
-        else:
-            return label[:12] + '...' if len(label) > 10 else label
-    else: 
+            res = constants.KNOWN_BUILDER_MAPPING[label] 
+            if short == False:
+                res += " (" + label[:9] + ")"
+            return res
+        else: 
+            return label[:15] + "..."
+    else:
         return label
-
 
 def create_searcher_builder_sankey(map, agg, title, unit, date):
     # nodes is index of searcher + builder, each unique
@@ -76,6 +85,7 @@ def create_searcher_builder_sankey(map, agg, title, unit, date):
                                ), autosize=True, width=800, height=1200, margin=dict(t=100, b=100, l=50, r=50))
     return fig 
 
+
 def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, mev_domain):
     # map, agg are non sorted, native maps from atomic or nonatomic
     if mev_domain == "atomic":
@@ -92,14 +102,13 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count, mev_do
     # if x percentile of searchers is more than 30, we trim for better visuals
     if len(agg) > 30:
         agg = analysis.slice_dict(agg, 30)
-        for _, searchers in map.items():
-            searchers_to_remove = []  # Create an empty list to collect the searchers to be removed
-            for searcher in searchers:
-                if searcher not in agg:
-                    searchers_to_remove.append(searcher)  # Add searchers to the removal list if not in valid_searchers
-            for searcher in searchers_to_remove:
-                del searchers[searcher] 
-
+        res = defaultdict(lambda: defaultdict(int))
+        for builder, searchers in map.items():
+            for searcher, count in searchers.items():
+                if searcher in agg: 
+                    res[builder][searcher] += count 
+        map = res
+        
     return map, agg
 
 
@@ -123,6 +132,7 @@ def create_three_sankeys_by_metric(metric, unit, percentile, min_count):
     combined_fig = create_searcher_builder_sankey(combined_map, combined_agg, f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit,  ("7/1", "8/1"))
 
     return atomic_fig, nonatomic_fig, combined_fig
+
 
 def calculate_highlight_figures():
     atomic_agg = analysis.load_dict_from_json("atomic/new/agg/agg_vol.json")
@@ -158,10 +168,87 @@ def calculate_highlight_figures():
     return num_atomic, num_nonatomic, atomic_tot_vol, nonatomic_tot_vol, atomic_tot_tx, nonatomic_tot_tx
 
 
+def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
+    fig = go.Figure()
+    top_searchers = analysis.slice_dict(agg, 10)
+    builder_market_share = {}
+
+    for builder, searchers in map.items():
+        builder_market_share[builder] = sum(searchers.values())
+    
+    total_count = sum(builder_market_share.values())
+
+    for builder, searchers in map.items():
+        x = []
+        y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
+
+        # adding total market share as comparison
+        y.insert(0, "Total Market Shares")
+        x.insert(0, builder_market_share[builder] / total_count * 100)
+
+        for searcher, _ in top_searchers.items():
+            percent = searchers.get(searcher, 0) / agg[searcher] * 100
+            x.append(percent)
+        
+        fig.add_trace(go.Bar(
+            y=y[::-1],
+            x=x[::-1],
+            name=abbreviate_label(builder, True),
+            orientation="h",
+            hovertemplate='<b>%{x:.2r}%<b> ',
+        ))
+
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Percentage of {unit}".format(unit="Volume" if metric=="vol" else metric.capitalize()),
+        yaxis_title="",
+        xaxis_range=[0, 100],
+        barmode="stack",
+        legend={'traceorder':'normal'},
+        # margin={"l":20, "t":20},
+        font=dict(
+            family="Courier New, monospace",
+            color="black"
+        ),        
+    )
+
+    return fig
+
+
+def create_three_bar_charts_by_metric(metric, unit):
+    nonatomic_map = analysis.load_dict_from_json(f"nonatomic/new/builder_swapper_maps/builder_swapper_map_{metric}.json")
+    nonatomic_agg = analysis.load_dict_from_json(f"nonatomic/new/agg/agg_{metric}.json")
+    atomic_map = analysis.load_dict_from_json(f"atomic/new/builder_atomic_maps/builder_atomic_map_{metric}.json")
+    atomic_agg = analysis.load_dict_from_json(f"atomic/new/agg/agg_{metric}.json")
+    combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg)
+
+    atomic_agg = analysis.sort_agg(atomic_agg)
+    atomic_map = analysis.sort_map(analysis.return_atomic_maps_with_only_type(atomic_map, "total"))
+    atomic_map, atomic_agg = analysis.prune_known_entities_from_map_and_agg(atomic_map, atomic_agg)
+    atomic_fig = create_searcher_builder_percentage_bar_chart(atomic_map, atomic_agg, f"Atomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+
+    nonatomic_agg = analysis.sort_agg(nonatomic_agg)
+    nonatomic_map = analysis.sort_map(nonatomic_map)
+    nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(nonatomic_map, nonatomic_agg)
+    nonatomic_agg = analysis.remove_atomic_from_agg(nonatomic_agg, atomic_agg)
+    nonatomic_fig = create_searcher_builder_percentage_bar_chart(nonatomic_map, nonatomic_agg, f"Nonatomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+
+    combined_agg = analysis.sort_agg(combined_agg)
+    combined_map = analysis.sort_map(combined_map)
+    combined_fig = create_searcher_builder_percentage_bar_chart(combined_map, combined_agg, f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+
+    return atomic_fig, nonatomic_fig, combined_fig
+
+
+
 if __name__ == "__main__":
     atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric("vol", "USD", 0.95, 5000)
-    atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric("tx", "transactions", 0.95, 5)
+    atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric("tx", "number of transactions", 0.95, 5)
     atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric("bribe", "ETH", 0.95, 5)
+
+    atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric("vol", "USD")
+
 
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
     head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
@@ -179,14 +266,17 @@ if __name__ == "__main__":
             title, 
             head, 
             dp.Group(
-              dp.BigNumber(heading="Nr of Atomic Searchers", value=num_atomic),
-              dp.BigNumber(heading="Nr of Atomic MEV Transactions", value=atomic_tot_tx),
+              dp.BigNumber(heading="Number of Atomic Searchers", value=num_atomic),
+              dp.BigNumber(heading="Number of Atomic MEV Transactions", value=atomic_tot_tx),
               dp.BigNumber(heading="Total Volume from Atomic MEV (USD)", value=atomic_tot_vol),
-              dp.BigNumber(heading="Nr of Cefi-Defi Arb Searchers", value=num_nonatomic),
-              dp.BigNumber(heading="Nr of Cefi-Defi Arb Transactions", value=nonatomic_tot_tx),
+              dp.BigNumber(heading="Number of Cefi-Defi Arb Searchers", value=num_nonatomic),
+              dp.BigNumber(heading="Number of Cefi-Defi Arb Transactions", value=nonatomic_tot_tx),
               dp.BigNumber(heading="Total Volume of Cefi-Defi Arb (USD)", value=nonatomic_tot_vol),
               columns=3
             ),
+            combined_bar_vol,
+            atomic_bar_vol,
+            nonatomic_bar_vol,
             atomic_fig_tx,
             nonatomic_fig_vol,
             combined_fig_bribe,
