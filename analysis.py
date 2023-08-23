@@ -256,8 +256,8 @@ def sort_atomic_map_by_total(map):
 def combine_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg):
     total_map = defaultdict(lambda: defaultdict(int))
     for builder, searchers in atomic_map.items():
-        for searcher, stats in searchers.items():
-            total_map[builder][searcher] += stats["total"]
+        for searcher, stat in searchers.items():
+            total_map[builder][searcher] += stat
     
     for builder, searchers in nonatomic_map.items():
         for searcher, stat in searchers.items():
