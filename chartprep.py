@@ -28,10 +28,6 @@ def abbreviate_label(label, short=False):
         return label
 
 def create_searcher_builder_sankey(map, agg, title, unit, date):
-
-    analysis.dump_dict_to_json(map, "used_map.json")
-    analysis.dump_dict_to_json(agg, "used_agg.json")
-
     # nodes is index of searcher + builder, each unique
     # an entity will now be recognized as the index from this list now
     span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;">({} from {} to {})</span></span>'     
@@ -39,7 +35,6 @@ def create_searcher_builder_sankey(map, agg, title, unit, date):
     searcher_builder_map = analysis.create_searcher_builder_map(map)
     # nodes = sorted_searchers + list(map.keys())
     nodes = list(agg.keys()) + list(map.keys())
-    analysis.dump_dict_to_json(nodes, "nodes.json")
     abbreviated_nodes = [abbreviate_label(node) for node in nodes]
     source_indices = []
     target_indices = [] 
@@ -302,131 +297,154 @@ if __name__ == "__main__":
     all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("tx")
     all_maps_and_aggs_vol = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
     all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
+    all = [all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe]
 
-    atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, "vol", "USD")
-    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
-    atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
+    type = "tx"
+    for i in range(0, len(all)):
+        if i == 1:
+            type = "vol"
+        elif i == 2:
+            type = "bribe"
+        all_maps_and_aggs = all[i]
 
-    atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
-    atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, "tx", "number of transactions", 0.95, 5)
-    atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
+        for j in range(0, len(all_maps_and_aggs), 2):
+            map = all_maps_and_aggs[j]
+            agg = all_maps_and_aggs[j+1]
+            if j == 0:
+                mev_domain = "atomic"
+            elif j == 2:
+                mev_domain = "nonatomic"
+            elif j == 4:
+                mev_domain = "combined"
 
-    atomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx", "tx count")
-    nonatomic_searcher_pie_vol = create_searcher_pie_chart(all_maps_and_aggs_vol[3], "Noatomic Searchers", "Market Shares", "vol", "USD")
-    combined_searcher_pie_bribe = create_searcher_pie_chart(all_maps_and_aggs_bribe[5], "Combined Searchers Market Shares", "", "bribe", "ETH", True)
+            analysis.dump_dict_to_json(map, f"data/{type}/{mev_domain}_map_{type}.json")
+            analysis.dump_dict_to_json(agg, f"data/{type}/{mev_domain}_agg_{type}.json")
+
+
+    # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, "vol", "USD")
+    # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
+    # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
+
+    # atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
+    # atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, "tx", "number of transactions", 0.95, 5)
+    # atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
+
+    # atomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx", "tx count")
+    # nonatomic_searcher_pie_vol = create_searcher_pie_chart(all_maps_and_aggs_vol[3], "Noatomic Searchers", "Market Shares", "vol", "USD")
+    # combined_searcher_pie_bribe = create_searcher_pie_chart(all_maps_and_aggs_bribe[5], "Combined Searchers Market Shares", "", "bribe", "ETH", True)
     
-    title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
-    head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
-                +'<div style ="float:right;font-size:18px;color:#0F1419">View <a href="./data.html">raw data</a> </div></div>'
-                +'<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
-                +'<a href="https://twitter.com/nero_eth">winnsterx</a> & inspired by '
-                +'<a href="https://mevboost.pics">mevboost.pics</a> by <a href="https://twitter.com/nero_eth">Toni Wahrstätter</a></div>'
-                +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
-                +"\n")
+    # title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
+    # head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
+    #             +'<div style ="float:right;font-size:18px;color:#0F1419">View <a href="./data.html">raw data</a> </div></div>'
+    #             +'<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
+    #             +'<a href="https://twitter.com/winnsterx">winnsterx</a> & inspired by '
+    #             +'<a href="https://mevboost.pics">mevboost.pics</a> by <a href="https://twitter.com/nero_eth">Toni Wahrstätter</a></div>'
+    #             +'<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
+    #             +"\n")
 
-    view = dp.Blocks(
-        dp.Page(title="Highlights", blocks=[
-            title, 
-            head, 
-            atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
-            dp.Group(
-                atomic_searcher_pie_tx,
-                nonatomic_searcher_pie_vol,
-                columns=2
-            ),
-            combined_searcher_pie_bribe,
-            atomic_fig_tx,
-            nonatomic_fig_vol,
-            combined_fig_bribe
-        ]),
-        dp.Page(title="Volume", blocks=[
-            title, 
-            head, 
-            # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
-            # atomic_fig_vol,
-            # nonatomic_fig_vol, 
-        ]),
-        # dp.Page(title="Transaction Count", blocks=[
-        #     title, 
-        #     head, 
-        #     atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
-        #     atomic_fig_tx,
-        #     nonatomic_fig_tx,
-        # ]),
-        # dp.Page(title="Bribes", blocks=[
-        #     title, 
-        #     head, 
-        #     atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
-        #     atomic_fig_bribe,
-        #     nonatomic_fig_bribe,
-        #     combined_fig_bribe,
-        # ])
-    )
-    dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")
+    # view = dp.Blocks(
+    #     dp.Page(title="Highlights", blocks=[
+    #         title, 
+    #         head, 
+    #         atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
+    #         dp.Group(
+    #             atomic_searcher_pie_tx,
+    #             nonatomic_searcher_pie_vol,
+    #             columns=2
+    #         ),
+    #         combined_searcher_pie_bribe,
+    #         atomic_fig_tx,
+    #         nonatomic_fig_vol,
+    #         combined_fig_bribe
+    #     ]),
+    #     dp.Page(title="Volume", blocks=[
+    #         title, 
+    #         head, 
+    #         atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
+    #         atomic_fig_vol,
+    #         nonatomic_fig_vol, 
+    #     ]),
+    #     dp.Page(title="Transaction Count", blocks=[
+    #         title, 
+    #         head, 
+    #         atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
+    #         atomic_fig_tx,
+    #         nonatomic_fig_tx,
+    #     ]),
+    #     dp.Page(title="Bribes", blocks=[
+    #         title, 
+    #         head, 
+    #         atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
+    #         atomic_fig_bribe,
+    #         nonatomic_fig_bribe,
+    #         combined_fig_bribe,
+    #     ])
+    # )
+    # dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")
 
-    fixedposi = "<style>nav.min-h-screen {position: -webkit-sticky;position: sticky;}</style>"
+    # fixedposi = "<style>nav.min-h-screen {position: -webkit-sticky;position: sticky;}</style>"
 
-    more_css = '''
-        <style>
+    # more_css = '''
+    #     <style>
         
-        body {
-            max-width: 900px;
-            margin-left: auto !important;
-            margin-right: auto !important;
-            background: #eee;
-        }
-        @media screen and (min-width: 700px) {
-            body {
-                max-width: 1000px;
-            }
-        }
+    #     body {
+    #         max-width: 900px;
+    #         margin-left: auto !important;
+    #         margin-right: auto !important;
+    #         background: #eee;
+    #     }
+    #     @media screen and (min-width: 700px) {
+    #         body {
+    #             max-width: 1000px;
+    #         }
+    #     }
 
-        a.pt-1 {
-            position: sticky;
-            top:0%;
-            font-size: 1.4rem;
-            padding-top: 1.2rem !important;
-            padding-bottom: 1.2rem !important;
-        }
+    #     a.pt-1 {
+    #         position: sticky;
+    #         top:0%;
+    #         font-size: 1.4rem;
+    #         padding-top: 1.2rem !important;
+    #         padding-bottom: 1.2rem !important;
+    #     }
 
-        nav div, nav div.hidden {
-            margin: 0 0 0 0;
-            width: 100%;
-            justify-content: space-evenly;
-        }
-        .py-5.px-4 {
-            background: white;
-        }
-        main div.px-4 {
-            background: #eee;
-        }
+    #     nav div, nav div.hidden {
+    #         margin: 0 0 0 0;
+    #         width: 100%;
+    #         justify-content: space-evenly;
+    #     }
+    #     .py-5.px-4 {
+    #         background: white;
+    #     }
+    #     main div.px-4 {
+    #         background: #eee;
+    #     }
 
 
-        .flex {
-            width: 100%; 
-            justify-content: space-evenly;
-        }
+    #     .flex {
+    #         width: 100%; 
+    #         justify-content: space-evenly;
+    #     }
 
-        nav {
-            position: sticky;
-            top: 0;
-            z-index: 99999;
-            background-color: white;
-            display: flex;
-            margin-bottom: 1.5rem;
-        }
+    #     nav {
+    #         position: sticky;
+    #         top: 0;
+    #         z-index: 99999;
+    #         background-color: white;
+    #         display: flex;
+    #         margin-bottom: 1.5rem;
+    #     }
 
-        div.justify-start {
-            margin-top: 1rem;
-            margin-bottom: 1rem;
-        }
+    #     div.justify-start {
+    #         margin-top: 1rem;
+    #         margin-bottom: 1rem;
+    #     }
                 
-        </style>
-    '''
+    #     </style>
+    # '''
 
-    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "r") as file:
-        f = file.read()
-    OG_STUFF = ' <title>searcherbuilder.pics | Searcher Builder Dashboard</title>\n<meta charset="UTF-8" />\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:site" content="@winnsterx">\n<meta name="twitter:title" content="Searcher Builder Dashboard">\n<meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">\n<meta name="twitter:image" content="https://www.searcherbuilder.pics/">\n<meta property="og:title" content=Searcher Builder Dashboard>\n<meta property="og:site_name" content=searcherbuilder.pics>\n<meta property="og:url" content=searcherbuilder.pics>\n<meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum." >\n<meta property="og:type" content=website>\n<link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />\n<meta property="og:image" content=https://mevboost.toniwahrstaetter.com/pv.png>\n<meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">\n<meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">\n <meta name="author" content="Toni Wahrstätter">'
-    f = f.replace('<meta charset="UTF-8" />\n', fixedposi+ OG_STUFF+more_css) # + GA
-    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "w") as file:
-        file.write(f)
+    # with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "r") as file:
+    #     f = file.read()
+    # OG_STUFF = ' <title>searcherbuilder.pics | Searcher Builder Dashboard</title>\n<meta charset="UTF-8" />\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:site" content="@winnsterx">\n<meta name="twitter:title" content="Searcher Builder Dashboard">\n<meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">\n<meta name="twitter:image" content="https://www.searcherbuilder.pics/">\n<meta property="og:title" content=Searcher Builder Dashboard>\n<meta property="og:site_name" content=searcherbuilder.pics>\n<meta property="og:url" content=searcherbuilder.pics>\n<meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum." >\n<meta property="og:type" content=website>\n<link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />\n<meta property="og:image" content=https://mevboost.toniwahrstaetter.com/pv.png>\n<meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">\n<meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">\n <meta name="author" content="Toni Wahrstätter">'
+    # f = f.replace('<meta charset="UTF-8" />\n', fixedposi+ OG_STUFF+more_css) # + GA
+    # with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "w") as file:
+    #     file.write(f)
