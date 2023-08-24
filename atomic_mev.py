@@ -1,4 +1,5 @@
 import requests 
+import re, string
 import json 
 import time
 from collections import defaultdict
@@ -62,15 +63,21 @@ def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builde
 
 # maps the extradata to builder 
 def map_extra_data_to_builder(extra_data, feeRecipient):
-    builder = ""
-    for key in constants.extraData_mapping:
-        if key in extra_data.lower():
-            builder = constants.extraData_mapping[key]
-    # If no matches, return the original data
+    builder = re.sub(r'\W+', '', extra_data)
     if builder == "":
-        # if no extraData, use feeRecipient addr as builder name
         builder = feeRecipient
-    return builder
+    elif "geth" in builder or "nethermind" in builder or "linux" in builder:
+        builder = "vanilla_builder"
+    return builder 
+    # builder = ""
+    # for key in constants.extraData_mapping:
+    #     if key in extra_data.lower():
+    #         builder = constants.extraData_mapping[key]
+    # # If no matches, return the original data
+    # if builder == "":
+    #     # if no extraData, use feeRecipient addr as builder name
+    #     builder = feeRecipient
+    # return builder
 
     
 # filters out all bots that have interacted with a builder less than five times
@@ -83,12 +90,12 @@ def clean_up(data, threshold):
     return ordered_addrs
 
 
-# finds the block builder given block number using extraData
-def get_block_builder(block_number, prefetched_blocks): 
-    block = prefetched_blocks[str(block_number)]
-    extra_data = block["extraData"]
-    builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
-    return builder
+# # finds the block builder given block number using extraData
+# def get_block_builder(block_number, prefetched_blocks): 
+#     block = prefetched_blocks[str(block_number)]
+#     extra_data = block["extraData"]
+#     builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
+#     return builder
 
 
 # processes addr_tos of all MEV txs in a block
@@ -153,22 +160,22 @@ def analyze_blocks(prefetched_blocks):
 
 
 def compile_atomic_data(builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
-    analysis.dump_dict_to_json(builder_atomic_map_tx, "atomic/new/builder_atomic_maps/builder_atomic_map_tx.json")
-    analysis.dump_dict_to_json(builder_atomic_map_profit, "atomic/new/builder_atomic_maps/builder_atomic_map_profit.json")
-    analysis.dump_dict_to_json(builder_atomic_map_vol, "atomic/new/builder_atomic_maps/builder_atomic_map_vol.json")
-    analysis.dump_dict_to_json(builder_atomic_map_coin_bribe, "atomic/new/builder_atomic_maps/builder_atomic_map_coin_bribe.json")
-    analysis.dump_dict_to_json(builder_atomic_map_gas_bribe, "atomic/new/builder_atomic_maps/builder_atomic_map_gas_bribe.json")
+    analysis.dump_dict_to_json(builder_atomic_map_tx, "atomic/fifty/builder_atomic_maps/builder_atomic_map_tx.json")
+    analysis.dump_dict_to_json(builder_atomic_map_profit, "atomic/fifty/builder_atomic_maps/builder_atomic_map_profit.json")
+    analysis.dump_dict_to_json(builder_atomic_map_vol, "atomic/fifty/builder_atomic_maps/builder_atomic_map_vol.json")
+    analysis.dump_dict_to_json(builder_atomic_map_coin_bribe, "atomic/fifty/builder_atomic_maps/builder_atomic_map_coin_bribe.json")
+    analysis.dump_dict_to_json(builder_atomic_map_gas_bribe, "atomic/fifty/builder_atomic_maps/builder_atomic_map_gas_bribe.json")
 
     agg_tx = analysis.aggregate_atomic_searchers(builder_atomic_map_tx)
     agg_profit = analysis.aggregate_atomic_searchers(builder_atomic_map_profit)
     agg_vol = analysis.aggregate_atomic_searchers(builder_atomic_map_vol)
     agg_coin = analysis.aggregate_atomic_searchers(builder_atomic_map_coin_bribe)
     agg_gas = analysis.aggregate_atomic_searchers(builder_atomic_map_gas_bribe)
-    analysis.dump_dict_to_json(agg_tx, "atomic/new/agg/agg_tx.json")
-    analysis.dump_dict_to_json(agg_profit, "atomic/new/agg/agg_profit.json")
-    analysis.dump_dict_to_json(agg_vol, "atomic/new/agg/agg_vol.json")
-    analysis.dump_dict_to_json(agg_coin, "atomic/new/agg/agg_coin.json")
-    analysis.dump_dict_to_json(agg_gas, "atomic/new/agg/agg_gas.json")
+    analysis.dump_dict_to_json(agg_tx, "atomic/fifty/agg/agg_tx.json")
+    analysis.dump_dict_to_json(agg_profit, "atomic/fifty/agg/agg_profit.json")
+    analysis.dump_dict_to_json(agg_vol, "atomic/fifty/agg/agg_vol.json")
+    analysis.dump_dict_to_json(agg_coin, "atomic/fifty/agg/agg_coin.json")
+    analysis.dump_dict_to_json(agg_gas, "atomic/fifty/agg/agg_gas.json")
 
 
 if __name__ == "__main__":
@@ -176,7 +183,8 @@ if __name__ == "__main__":
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
 
-    prefetched_blocks = analysis.load_dict_from_json("block_data/blocks_30_days.json")
+    prefetched_blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
+    prefetched_internal_transfers = analysis.load_dict_from_json("internal_transfer_data/internal_transfers_50_days.json")
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
     builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe = analyze_blocks(prefetched_blocks)

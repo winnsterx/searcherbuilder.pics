@@ -355,6 +355,50 @@ def humanize_number(value, fraction_point=1):
     return return_value
 
 
+def get_builder_market_share_percentage(map):
+    builder_market_share = {}
+
+    for builder, searchers in map.items():
+        builder_market_share[builder] = sum(searchers.values())
+    total_count = sum(builder_market_share.values())
+    for builder, count in builder_market_share.items():
+        builder_market_share[builder] = count / total_count * 100
+    
+    return builder_market_share
+
+def find_notable_searcher_builder_relationships(map, threshold):
+    tolerance = 3
+    notable = defaultdict(lambda: defaultdict(int))
+    highlight_relationship = set()
+    # notable = set()
+    searcher_builder_map = create_searcher_builder_map(map)
+
+    # for searcher, builders in searcher_builder_map.items():
+    #     builder_percents = defaultdict(int)
+    #     total_count = sum(builders.values())
+    #     for builder, count in builders.items():
+    #         percent = count / total_count * 100 
+    #         builder_percents[builder] = percent
+    #         if percent > threshold:
+    #             notable[searcher] = builder_percents
+
+    builder_market_share = get_builder_market_share_percentage(map)
+    for searcher, builders in searcher_builder_map.items():
+        total_count = sum(builders.values())
+        for builder, count in builders.items():
+            percent = count / total_count * 100 
+            builder_usual_percent = builder_market_share[builder]
+            if percent > builder_usual_percent * (1 + tolerance) and percent > 10:
+                highlight_relationship.add((searcher, builder))
+                print(searcher, builder, percent, builder_usual_percent)
+                notable[searcher] = {builder: (count / total_count) * 100 for builder, count in builders.items()}
+                break
+
+    return notable, builder_market_share, highlight_relationship
+
+
+
+
 
 if __name__ == "__main__":
     # nonatomic_map = sort_map(load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))

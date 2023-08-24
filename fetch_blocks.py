@@ -2,6 +2,7 @@ import requests, json, time, ijson, os
 from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
 
 MAX_RETRIES = 5  # Define a maximum number of retries
 INITIAL_BACKOFF = 1  # Define initial backoff time in seconds
@@ -157,16 +158,65 @@ def merge_large_json_files(file_list, output_file):
         outfile.write('}')  # end of json
 
 
+def get_internal_transfers_to_fee_recipient_in_block(block_number, builder, all_internal_transfers):
+    try:
+        headers = { "accept": "application/json", "content-type": "application/json" }
+        payload = {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "method": "alchemy_getAssetTransfers",
+            "params": [
+                {
+                    "category": ["internal"],
+                    "toAddress": builder, 
+                    "fromBlock": hex(int(block_number)),
+                    "toBlock": hex(int(block_number))
+                }
+            ]
+        }
+        response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
+        print(block_number, response.status_code)
+        transfers = response.json()["result"]["transfers"]
+        transfer_map = {tr['hash']: {'from': tr["from"], 'to': tr['to'], 'value': tr["value"]} for tr in transfers}
+        all_internal_transfers[block_number] = transfer_map
+    except Exception as e:
+        print("error found in one block", e)
+
+
+def default_internal_transfer_dic():
+    return {
+        "from": "",
+        "to": "",
+        "value": ""
+    }
+
+def get_internal_transfers_to_fee_recipients_in_blocks(blocks):
+    all_internal_transfers = defaultdict(lambda: defaultdict(default_internal_transfer_dic))
+    with ThreadPoolExecutor(max_workers=64) as executor:
+        # Use the executor to submit the tasks
+        futures = [executor.submit(get_internal_transfers_to_fee_recipient_in_block, block_number, block["feeRecipient"], all_internal_transfers) for block_number, block in blocks.items()]
+        for future in as_completed(futures):
+            pass
+    
+    return all_internal_transfers
+    
+
+
 if __name__ == "__main__":
-    start_block = 17595510 # Jul-01-2023 12:00:11 AM UTC
-    num_blocks = 223200 # 31 * 24 * 60 * 60 / 12
-    end_block = 17818710 # Aug 1 
+    start_block = 17595510 #  Jul-01-2023 12:00:11 AM +UTC
+    num_blocks = 360000 # 50 * 24 * 60 * 60 / 12
+    end_block = 17955510 # Aug-20-2023 10:58:47 AM +UTC
 
-    # 17,779,790 is where we left off 
+    blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
+    all_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
+    analysis.dump_dict_to_json(all_internal_transfers,"internal_transfers_50_days.json")
 
-    blocks = get_blocks(17944266, 2)
-    analysis.dump_dict_to_json(blocks, "block_data/two_blocks.json")
-    count_blocks(blocks, start_block)
+    # blocks = get_blocks(start_block, num_blocks)
+    # analysis.dump_dict_to_json(blocks, "block_data/now_aug_blocks.json")
+
+    # merge_large_json_files(["block_data/blocks_30_days.json", "block_data/aug_blocks.json"], "blocks_50_days.json")
+    # blocks = analysis.load_dict_from_json("blocks_50_days.json")
+    # count_blocks(blocks, 17595510)
 
 
 

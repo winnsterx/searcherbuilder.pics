@@ -1,4 +1,5 @@
 import datapane as dp
+import random
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
@@ -7,6 +8,8 @@ import analysis
 import visual_analysis
 import constants
 from collections import defaultdict
+import seaborn as sns
+import colorcet as cc
 
 
 def abbreviate_label(label, short=False):
@@ -153,6 +156,86 @@ def calculate_highlight_figures():
     nonatomic_tot_tx = analysis.humanize_number(sum(nonatomic_agg.values()))
 
     return num_atomic, num_nonatomic, atomic_tot_vol, nonatomic_tot_vol, atomic_tot_tx, nonatomic_tot_tx
+
+
+def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
+    fig = go.Figure()
+    notable, builder_market_share, highlight_relationship = analysis.find_notable_searcher_builder_relationships(map, threshold)
+
+    colors = sns.color_palette(cc.glasbey_hv, len(list(map.keys())))
+    # random.shuffle(colors)
+    builder_color_map = {builder: color for builder, color in zip(list(map.keys()), colors)}
+
+    for builder, searchers in map.items():
+        # Separate data for highlighted and non-highlighted bars
+        x_highlighted = []
+        y_highlighted = []
+        x_regular = []
+        y_regular = []
+
+        y_highlighted.insert(0, "Total Market Shares")
+        x_highlighted.insert(0, builder_market_share[builder])
+
+        for searcher, builders_percent in notable.items():
+            if (searcher, builder) in highlight_relationship or searcher == "Total Market Shares":
+                y_highlighted.append(searcher)
+                x_highlighted.append(builders_percent.get(builder, ""))
+            else:
+                y_regular.append(searcher)
+                x_regular.append(builders_percent.get(builder, ""))
+
+
+        # Trace for non-highlighted bars
+        fig.add_trace(go.Bar(
+            y=[abbreviate_label(s) for s in y_regular[::-1]],
+            x=x_regular[::-1],
+            name=abbreviate_label(builder, True),
+            orientation="h",
+            hovertemplate='<b>%{x:.2r}%<b> ',
+            marker=dict(
+                color='lightgray',
+                line=dict(width=1)
+            ),
+            showlegend=False,   # Don't show this in legend
+            legendgroup=builder  # Use same legendgroup identifier as before
+        ))
+
+        # Trace for highlighted bars
+        fig.add_trace(go.Bar(
+            y=[abbreviate_label(s) for s in y_highlighted[::-1]],
+            x=x_highlighted[::-1],
+            name=abbreviate_label(builder, True),
+            orientation="h",
+            hovertemplate='<b>%{x:.2r}%<b> ',
+            marker=dict(
+                color=f"rgb{builder_color_map[builder]}",
+                line=dict(width=1)
+            ),
+            legendgroup=builder  # Use builder as legendgroup identifier
+        ))
+
+        
+    fig.update_layout(
+        title="Notable Searcher Builder Relationships",
+        xaxis_title="Percentage of Txs",
+        yaxis_title="",
+        xaxis_range=[0, 100],
+        barmode="stack",
+        legend={'traceorder':'normal'},
+        # margin={"l":20, "t":20},
+        font=dict(
+            family="Courier New, monospace",
+            color="black"
+        ),        
+        autosize=False,
+        height=1200,
+    )
+
+    return fig
+            
+
+
+
 
 
 def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
@@ -326,15 +409,17 @@ def dump_data_used(all):
 
 
 if __name__ == "__main__":
-    all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("tx")
-    all_maps_and_aggs_vol = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
-    all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
-    dump_data_used([all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
+    # all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("tx")
+    # all_maps_and_aggs_vol = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
+    # all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
+    # dump_data_used([all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
+
 
     # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, "vol", "USD")
-    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
+    # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
     # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
-
+    interesting = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("data/tx/atomic_map_tx.json"))
+    # interesting_nonatomic = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_vol[2], 70)
     # atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
     # atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, "tx", "number of transactions", 0.95, 5)
     # atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
@@ -356,7 +441,9 @@ if __name__ == "__main__":
         dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
+            interesting, 
+            # interesting_nonatomic,
+            # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
             # dp.Group(
             #     atomic_searcher_pie_tx,
             #     nonatomic_searcher_pie_vol,

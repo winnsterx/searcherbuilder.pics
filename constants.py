@@ -36,6 +36,7 @@ KNOWN_BUILDER_MAPPING = {
 JUMP = "0x9507c04b10486547584c37bcbd931b2a4fee9a41"
 JARED_CONTRACT = "0x6b75d8af000000e20b7a7ddf000ba900b4009a80"
 SYMBOLIC_CAPITAL_PARTNER = "0xa69babef1ca67a37ffaf7a485dfff3382056e78c"
+SYMBOLIC_CAPITAL_PARTNER_2 = "0x5050e08626c499411b5d0e0b5af0e83d3fd82edf"
 WINTERMUTE_1 = "0x0000006daea1723962647b7e189d311d757fb793"
 WINTERMUTE_2 = "0x00000000AE347930bD1E7B0F35588b92280f9e75"
 WINTERMUTE_3 = "0xaf0b0000f0210d0f421f0009c72406703b50506b"
@@ -44,6 +45,7 @@ KNOWN_SEARCHERS_MAPPING = {
     JUMP: "Jump Trading",
     JARED_CONTRACT: "jaredfromsubway.eth",
     SYMBOLIC_CAPITAL_PARTNER: "Symbolic Capital Partners",
+    SYMBOLIC_CAPITAL_PARTNER_2: "Symbolic Capital Partners 2",
     WINTERMUTE_1: "Wintermute",
     WINTERMUTE_2: "Wintermute", 
     WINTERMUTE_3: "Wintermute"
@@ -338,7 +340,9 @@ extraData_mapping = {
     "nethermind": "vanilla_builders",
     "geth": "vanilla_builders",
     "uwu": "uwu.builders",
-    "antbuilder": "antbuilder"
+    "antbuilder": "antbuilder",
+    "haz": "haz_buillder",
+    "smithbot": "smithbot",
 }
 
 BLOCK_BUILDER_MAP_FILE = "block_to_builder.json"
