@@ -12,12 +12,10 @@ import nonatomic_mev
 # contract is ignored if it is a known router, dex, etc
 def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
     mev_type = tx['mev_type']
-    if mev_type == "swap" or mev_type == "sandwich":
-        return
 
     addr_to = tx['address_to'].lower()
     addr_from = tx['address_from'].lower()
-    profit = tx.get('extractor_profit_usd', 0) or 0
+    profit = tx.get('extractor_profit_usd', 0) or 0 
     volume = tx.get('extractor_swap_volume_usd', 0) or 0
 
     # collect info on bribes
@@ -91,20 +89,21 @@ def clean_up(data, threshold):
 
 
 # # finds the block builder given block number using extraData
-# def get_block_builder(block_number, prefetched_blocks): 
-#     block = prefetched_blocks[str(block_number)]
+# def get_block_builder(block_number, fetched_blocks): 
+#     block = fetched_blocks[str(block_number)]
 #     extra_data = block["extraData"]
 #     builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
 #     return builder
 
 
 # processes addr_tos of all MEV txs in a block
-def analyze_block(session, url, block_number, block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
+def analyze_block(session, url, block_number, block, fetched_internal_transfers, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
     try: 
         extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
         builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
         fee_recipient = block["feeRecipient"]
-        transfer_map = nonatomic_mev.get_internal_transfers_to_fee_recipient_in_block(block_number, fee_recipient)
+        transfer_map = fetched_internal_transfers[block_number]
+        # transfer_map = nonatomic_mev.get_internal_transfers_to_fee_recipient_in_block(block_number, fee_recipient)
         payload = {
             'block_number': block_number,
             "count": "1"
@@ -136,7 +135,7 @@ def default_searcher_dic():
 
 # iterate through all the blocks to create a frequency mapping between builders and searchers 
 # use thread pool to expediate process
-def analyze_blocks(prefetched_blocks):
+def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
     builder_atomic_map_tx = defaultdict(lambda : defaultdict(default_searcher_dic))
@@ -150,8 +149,8 @@ def analyze_blocks(prefetched_blocks):
         print("starting to go thru blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
-            futures = [executor.submit(analyze_block, session, zeromev_url, block_number, block,
-                                       builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe) for block_number, block in prefetched_blocks.items()]
+            futures = [executor.submit(analyze_block, session, zeromev_url, block_number, block, fetched_internal_transfers,
+                                       builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe) for block_number, block in fetched_blocks.items()]
             for future in as_completed(futures):
                 pass
         print("finished counting in", time.time() - start, " seconds")
@@ -183,11 +182,11 @@ if __name__ == "__main__":
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
 
-    prefetched_blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
-    prefetched_internal_transfers = analysis.load_dict_from_json("internal_transfer_data/internal_transfers_50_days.json")
+    fetched_blocks = analysis.load_dict_from_json("block_data/two_blocks.json")
+    fetched_internal_transfers = analysis.load_dict_from_json("internal_transfer_data/internal_transfers_50_days.json")
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
-    builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe = analyze_blocks(prefetched_blocks)
+    builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 

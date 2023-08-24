@@ -18,13 +18,6 @@ def dump_dict_to_json(dict, filename):
     with open(filename, 'w+') as fp: 
         json.dump(dict, fp)
 
-def create_agg_from_map(map):
-    agg = {}
-    for _, searchers in map.items():
-        for searcher, count in searchers.items():
-            agg[searcher] = agg.get(searcher, 0) + count
-    return agg
-
     
         
 def find_joint_between_two_aggs(db_one, db_two):
@@ -283,11 +276,13 @@ def create_searcher_builder_map(map):
     res = sort_map(res)
     return res
 
-def create_agg_from_map(map):
+
+def create_sorted_agg_from_map(map):
     res = defaultdict(int)
     for _, searchers in map.items():
         for searcher, count in searchers.items():
             res[searcher] += count
+    res = sort_agg(res)
     return res
 
 
@@ -315,7 +310,7 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
         res = sort_atomic_map_by_total(res)
         dump_dict_to_json(res, "atomic/new/builder_atomic_maps/builder_atomic_map_bribe.json")
         res = prune_known_entities_from_atomic_map(res)
-        agg = sort_agg(create_agg_from_map(res))
+        agg = create_sorted_agg_from_map(res)
         dump_dict_to_json(agg, "atomic/new/agg/agg_bribe.json")
     else: 
         res = defaultdict(lambda : defaultdict(int))
@@ -329,7 +324,7 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
         res = sort_map(res)
         dump_dict_to_json(res, "nonatomic/new/builder_swapper_maps/builder_swapper_map_bribe.json")
         res = prune_known_entities_from_simple_map(res)
-        agg = sort_agg(create_agg_from_map(res))
+        agg = create_sorted_agg_from_map(res)
         dump_dict_to_json(agg, "nonatomic/new/agg/agg_bribe.json")
 
     return res, agg

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import requests, json, time, ijson, os
 from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
@@ -115,15 +116,18 @@ def get_blocks(start_block, num_blocks):
 
 # Counts that the blocks in block file is in order and present
 def count_blocks(blocks, start_block):
+    missing = []
     block_num = start_block
     
     for b, _ in blocks.items():
-        if int(b) != block_num:
+        # b > block_number
+        while int(b) > block_num:
             print("missing / out of order block number", b, "isnt ", block_num)
-            return False
+            missing.append(block_num)
+            block_num += 1
         block_num += 1
     print(f"all {len(blocks)} blocks are in order and present, ending at", block_num - 1)
-    return True
+    return missing
 
 def prepare_file_list(dir, keyword="", sort=True):
     # dir = block_data, no /
@@ -136,6 +140,12 @@ def prepare_file_list(dir, keyword="", sort=True):
     if sort: 
         file_list = sorted(file_list)
     return file_list
+
+
+def decimal_serializer(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)  # or use str(obj) if you want the exact string representation
+    raise TypeError("Type not serializable")
 
 def merge_large_json_files(file_list, output_file):
     with open(output_file, 'w') as outfile:
@@ -152,7 +162,7 @@ def merge_large_json_files(file_list, output_file):
                     # if not first object, add a comma
                     if write_comma:  
                         outfile.write(',')
-                    outfile.write(json.dumps(key) + ':' + json.dumps(value))  # add block_number: block_detail pair
+                    outfile.write(json.dumps(key) + ':' + json.dumps(value, default=decimal_serializer))  # add block_number: block_detail pair
                     write_comma = True
 
         outfile.write('}')  # end of json
@@ -201,23 +211,48 @@ def get_internal_transfers_to_fee_recipients_in_blocks(blocks):
     return all_internal_transfers
     
 
+def get_blocks_by_number(block_nums):
+    blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
+    res = {}
+    for num in block_nums:
+        res[num] = blocks[str(num)]
+
+    return res
+        
+
 
 if __name__ == "__main__":
     start_block = 17595510 #  Jul-01-2023 12:00:11 AM +UTC
     num_blocks = 360000 # 50 * 24 * 60 * 60 / 12
     end_block = 17955510 # Aug-20-2023 10:58:47 AM +UTC
 
-    blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
-    all_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
-    analysis.dump_dict_to_json(all_internal_transfers,"internal_transfers_50_days.json")
+    # blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
+    # all_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
+    # analysis.dump_dict_to_json(all_internal_transfers,"internal_transfers_50_days.json")
 
     # blocks = get_blocks(start_block, num_blocks)
     # analysis.dump_dict_to_json(blocks, "block_data/now_aug_blocks.json")
 
     # merge_large_json_files(["block_data/blocks_30_days.json", "block_data/aug_blocks.json"], "blocks_50_days.json")
-    # blocks = analysis.load_dict_from_json("blocks_50_days.json")
-    # count_blocks(blocks, 17595510)
 
+    # internal_transfers = analysis.load_dict_from_json("internal_transfers_50_days.json")
+    # sorted_internal_transfers = dict(sorted(internal_transfers.items()))
+    # missing = count_blocks(sorted_internal_transfers, 17595510)
+    # missing_blocks = analysis.load_dict_from_json("missing_blocks.json")
+    # missing_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(missing_blocks)
+    # analysis.dump_dict_to_json(missing_internal_transfers, "missing_internal_transfers.json")
+
+    # print(missing)
+    # for i in range(start_block, end_block+1):
+    #     present = blocks[i]
+
+    # files = ["internal_transfers_data/internal_transfers_50_days.json", "missing_internal_transfers.json"]
+
+    # merge_large_json_files(files, "together_internals.json")    
+    # internal_transfers = analysis.load_dict_from_json("internal_transfers_data/internal_transfers_50_days.json")
+    # sorted_internal_transfers = dict(sorted(internal_transfers.items()))
+    # missing = count_blocks(sorted_internal_transfers, 17595510)
+    # analysis.dump_dict_to_json(sorted_internal_transfers, "internal_transfers_data/internal_transfers_50_days.json")
 
 
 

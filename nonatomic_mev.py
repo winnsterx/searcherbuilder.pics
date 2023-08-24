@@ -51,7 +51,8 @@ def get_swaps(block_number):
 # Calculates median gas price given a list of transactions 
 def calculate_block_median_gas_price(transactions):
     gas_prices = [tx['gasPrice'] for tx in transactions]
-    return statistics.median(gas_prices)
+    if len(gas_prices) > 0:
+        return statistics.median(gas_prices)
 
 
 # Simplifies transfers returned by Alchemy's getInternalTransfers function
@@ -68,154 +69,150 @@ def simplify_transfers(transfers):
     return simplified
 
 
-# block_number: string, builder: string
-# Gets set of internal transfers to the builder in a block using Alchemy's API
-def get_internal_transfers_to_fee_recipient_in_block(block_number, builder):
-    headers = { "accept": "application/json", "content-type": "application/json" }
-    payload = {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "method": "alchemy_getAssetTransfers",
-        "params": [
-            {
-                "category": ["internal"],
-                "toAddress": builder, 
-                "fromBlock": hex(int(block_number)),
-                "toBlock": hex(int(block_number))
-            }
-        ]
-    }
-    response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
-    transfers = response.json()["result"]["transfers"]
-    transfer_map = {tr['hash']: {'from': tr["from"], 'to': tr['to'], 'value': tr["value"]} for tr in transfers}
-    return transfer_map
-
 
 def followed_by_transfer_to_builder(fee_recipient, cur_tx, next_tx):
+    if next_tx == {}:
+        return False
     if next_tx["from"] == cur_tx["from"] and next_tx["to"] == fee_recipient:
         return True
     return False 
 
+
+# analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas)
+def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas,
+               builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+               builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
+    tx_index = swap['tx_index']
+    tx_volume = swap.get('user_swap_volume_usd', 0) or 0
+
+    if full_tx["hash"] in transfer_map.keys(): 
+        builder_nonatomic_map_tx[builder][transfer_map[full_tx['hash']]["from"]] += 1
+        builder_nonatomic_map_vol[builder][transfer_map[full_tx['hash']]["from"]] += tx_volume
+        builder_nonatomic_map_coin_bribe[builder][transfer_map[full_tx['hash']]["from"]] += transfer_map[full_tx['hash']]["value"]
+
+        coinbase_bribe.setdefault(transfer_map[full_tx['hash']]["from"], []).append({
+            "hash": full_tx["hash"],
+            "builder": builder,
+            "bribe": transfer_map[full_tx['hash']]["value"]
+        })
+    # if followed by a direct transfer to builder
+    elif followed_by_transfer_to_builder(fee_recipient, full_tx, full_next_tx) == True:
+        # mev bot collected here will be an EOA
+        builder_nonatomic_map_tx[builder][full_tx["from"]] += 1
+        builder_nonatomic_map_vol[builder][full_tx["from"]] += tx_volume
+        builder_nonatomic_map_coin_bribe[builder][full_tx["from"]] += full_next_tx["value"]
+        
+        after_bribe.setdefault(full_tx["from"], []).append({
+            "hash": full_tx["hash"],
+            "builder": builder,
+            "bribe": full_next_tx["value"]
+        })
+    # if within top of block (first 10%):
+    elif tx_index <= top_of_block_boundary:
+        builder_nonatomic_map_tx[builder][full_tx["to"]] += 1
+        builder_nonatomic_map_vol[builder][full_tx["to"]] += tx_volume
+        builder_nonatomic_map_gas_bribe[builder][full_tx["to"]] += full_tx["gas"] * full_tx["gasPrice"]
+
+        tob_bribe.setdefault(full_tx["to"], []).append({
+            "hash": full_tx['hash'],
+            "builder": builder,
+            "index": tx_index,
+            "gas_price": full_tx['gasPrice'],
+            "gas": full_tx['gas'],
+            "block_median_gas": median_gas,
+        })
+
+
 # Given a block and its txs, get all the valid swap txs in that block, check that the swap txs 
 # EITHER contains an internal transfer to builder OR pays in top of block. 
-def analyze_block(block_number, block, builder_swapper_map_tx, builder_swapper_map_vol, 
-                  builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
+def analyze_block(block_number, block, fetched_internal_transfers, builder_nonatomic_map_tx, builder_nonatomic_map_vol, 
+                  builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
     # human-readable builder name, derived from extraData 
     builder = atomic_mev.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
     # hex-string of feeRecipient. can be builder or proposer
     fee_recipient = block["feeRecipient"]
     median_gas = calculate_block_median_gas_price(block["transactions"])
-    transfer_map = get_internal_transfers_to_fee_recipient_in_block(block_number, fee_recipient)
+    transfer_map = fetched_internal_transfers[block_number]
 
     all_swaps = get_swaps(block_number)
 
     total_txs = len(block["transactions"])
     top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
-    print(block_number, total_txs)
+    print(block_number, len(all_swaps))
 
 
     # only consider txs labeled as swap by zeromev
     for swap in all_swaps:
-        tx_index = swap['tx_index']
-        tx = block["transactions"][tx_index] 
-        tx_volume = swap['user_swap_volume_usd']
+        print("hi")
         # if bribe via coinbase transfer
-        if tx["hash"] in transfer_map.keys(): 
-            builder_swapper_map_tx[builder][transfer_map[tx['hash']]["from"]] += 1
-            builder_swapper_map_vol[builder][transfer_map[tx['hash']]["from"]] += tx_volume
-            builder_swapper_map_coin_bribe[builder][transfer_map[tx['hash']]["from"]] += transfer_map[tx['hash']]["value"]
+#         def analyze_tx(builder, tx, full_tx, transfer_map, full_next_tx):
+        full_tx = block["transactions"][swap["tx_index"]]
+        full_next_tx = block.get("transactions", [])[swap['tx_index']+1] if 0 <= swap['tx_index']+1 < len(block.get("transactions", [])) else None
 
-            coinbase_bribe.setdefault(transfer_map[tx['hash']]["from"], []).append({
-                "hash": tx["hash"],
-                "builder": builder,
-                "bribe": transfer_map[tx['hash']]["value"]
-            })
-        # if followed by a direct transfer to builder
-        elif followed_by_transfer_to_builder(fee_recipient, tx, block["transactions"][tx_index + 1]) == True:
-            # mev bot collected here will be an EOA
-            builder_swapper_map_tx[builder][tx["from"]] += 1
-            builder_swapper_map_vol[builder][tx["from"]] += tx_volume
-            builder_swapper_map_coin_bribe[builder][tx["from"]] += block["transactions"][tx_index + 1]["value"]
-            
-            after_bribe.setdefault(tx["from"], []).append({
-                "hash": tx["hash"],
-                "builder": builder,
-                "bribe": block["transactions"][tx_index + 1]["value"]
-            })
-        # if within top of block (first 10%):
-        elif swap['tx_index'] <= top_of_block_boundary:
-            builder_swapper_map_tx[builder][tx["to"]] += 1
-            builder_swapper_map_vol[builder][tx["to"]] += tx_volume
-            builder_swapper_map_gas_bribe[builder][tx["to"]] += tx["gas"] * tx["gasPrice"]
-
-            tob_bribe.setdefault(tx["to"], []).append({
-                "hash": tx['hash'],
-                "builder": builder,
-                "index": tx_index,
-                "gas_price": tx['gasPrice'],
-                "gas": tx['gas'],
-                "block_median_gas": median_gas,
-            })
+        analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas,
+                   builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+                   builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
         
 
-def analyze_blocks(blocks):
-    builder_swapper_map_tx = defaultdict(lambda: defaultdict(int))
-    builder_swapper_map_vol = defaultdict(lambda: defaultdict(int))
-    builder_swapper_map_coin_bribe = defaultdict(lambda: defaultdict(int))
-    builder_swapper_map_gas_bribe = defaultdict(lambda: defaultdict(int))
+def analyze_blocks(fetched_blocks, fetched_internal_transfers):
+    builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
+    builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
+    builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
+    builder_nonatomic_map_gas_bribe = defaultdict(lambda: defaultdict(int))
 
     coinbase_bribe = {}
     after_bribe = {}
     tob_bribe = {}
     with ThreadPoolExecutor(max_workers=64) as executor:
         # Use the executor to submit the tasks
-        futures = [executor.submit(analyze_block, block_number, block, builder_swapper_map_tx, 
-                                   builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, 
-                                   coinbase_bribe, after_bribe, tob_bribe) for block_number, block in blocks.items()]
+        futures = [executor.submit(analyze_block, block_number, block, fetched_internal_transfers, builder_nonatomic_map_tx, 
+                                   builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
+                                   coinbase_bribe, after_bribe, tob_bribe) for block_number, block in fetched_blocks.items()]
         for future in as_completed(futures):
             pass
-    return builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
+    return builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
     
 
-# end result: 1) builder swapper map that shows builder: searcher where searchers have submitted more than 5 times
+# end result: 1) builder nonatomic map that shows builder: searcher where searchers have submitted more than 5 times
 # 2) aggregate, frequency map of searchers: # of txs 
 # 3) show bots that come when u have a lower threshold, for checking if bot 
     # lower threshold nets mev bots without adding false positives. 
     # will we include swaps that are actually not MEV, if we lower the threshold? 
 
-def compile_cefi_defi_data(builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
-    # trimmed_map = searcher_db.clean_up(builder_swapper_map, 5)
-    analysis.dump_dict_to_json(builder_swapper_map_tx, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_tx.json")
-    analysis.dump_dict_to_json(builder_swapper_map_vol, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_vol.json")
-    analysis.dump_dict_to_json(builder_swapper_map_coin_bribe, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_coin_bribe.json")
-    analysis.dump_dict_to_json(builder_swapper_map_gas_bribe, "non_atomic/vol_after_tob/builder_swapper_maps/builder_swapper_map_gas_bribe.json")
+def compile_cefi_defi_data(builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
+    # trimmed_map = searcher_db.clean_up(builder_nonatomic_map, 5)
+    analysis.dump_dict_to_json(builder_nonatomic_map_tx, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_tx.json")
+    analysis.dump_dict_to_json(builder_nonatomic_map_vol, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_vol.json")
+    analysis.dump_dict_to_json(builder_nonatomic_map_coin_bribe, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json")
+    analysis.dump_dict_to_json(builder_nonatomic_map_gas_bribe, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json")
 
-    agg_tx = analysis.aggregate_searchers(builder_swapper_map_tx)
-    agg_vol = analysis.aggregate_searchers(builder_swapper_map_vol)
-    agg_coin = analysis.aggregate_searchers(builder_swapper_map_coin_bribe)
-    agg_gas = analysis.aggregate_searchers(builder_swapper_map_gas_bribe)
-    analysis.dump_dict_to_json(agg_tx, "non_atomic/vol_after_tob/agg/agg_tx.json")
-    analysis.dump_dict_to_json(agg_vol, "non_atomic/vol_after_tob/agg/agg_vol.json")
-    analysis.dump_dict_to_json(agg_coin, "non_atomic/vol_after_tob/agg/agg_coin.json")
-    analysis.dump_dict_to_json(agg_gas, "non_atomic/vol_after_tob/agg/agg_gas.json")
+    agg_tx = analysis.create_sorted_agg_from_map(builder_nonatomic_map_tx)
+    agg_vol = analysis.create_sorted_agg_from_map(builder_nonatomic_map_vol)
+    agg_coin = analysis.create_sorted_agg_from_map(builder_nonatomic_map_coin_bribe)
+    agg_gas = analysis.create_sorted_agg_from_map(builder_nonatomic_map_gas_bribe)
+    analysis.dump_dict_to_json(agg_tx, "nonatomic/fifty/agg/agg_tx.json")
+    analysis.dump_dict_to_json(agg_vol, "nonatomic/fifty/agg/agg_vol.json")
+    analysis.dump_dict_to_json(agg_coin, "nonatomic/fifty/agg/agg_coin.json")
+    analysis.dump_dict_to_json(agg_gas, "nonatomic/fifty/agg/agg_gas.json")
 
     # bots that are only included when threshold is lower, 
-    analysis.dump_dict_to_json(coinbase_bribe, "non_atomic/vol_after_tob/bribe_specs/coinbase_bribe.json")
-    analysis.dump_dict_to_json(after_bribe, "non_atomic/vol_after_tob/bribe_specs/after_bribe.json")
-    analysis.dump_dict_to_json(tob_bribe, "non_atomic/vol_after_tob/bribe_specs/tob_bribe.json")
+    analysis.dump_dict_to_json(coinbase_bribe, "nonatomic/fifty/bribe_specs/coinbase_bribe.json")
+    analysis.dump_dict_to_json(after_bribe, "nonatomic/fifty/bribe_specs/after_bribe.json")
+    analysis.dump_dict_to_json(tob_bribe, "nonatomic/fifty/bribe_specs/tob_bribe.json")
 
 
 if __name__ == "__main__":
     # 17563790 to 17779790
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
-    blocks_fetched = analysis.load_dict_from_json("block_data/blocks_30_days.json")
+    fetched_blocks = analysis.load_dict_from_json("block_data/blocks_3.json")
+    fetched_internal_transfers = analysis.load_dict_from_json("internal_transfers_data/internal_transfers_50_days.json")
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
-    builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(blocks_fetched)
+    builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 
-    compile_cefi_defi_data(builder_swapper_map_tx, builder_swapper_map_vol, builder_swapper_map_coin_bribe, builder_swapper_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
+    compile_cefi_defi_data(builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
