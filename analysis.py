@@ -13,6 +13,10 @@ def load_dict_from_json(filename):
     with open(filename) as file:
         dict = json.load(file)
         return dict
+    
+
+
+
 
 def dump_dict_to_json(dict, filename):
     with open(filename, 'w+') as fp: 
@@ -378,7 +382,7 @@ def get_builder_market_share_percentage(map):
     return builder_market_share
 
 def find_notable_searcher_builder_relationships(map, threshold):
-    tolerance = 3
+    tolerance = 1
     notable = defaultdict(lambda: defaultdict(int))
     highlight_relationship = set()
     # notable = set()
@@ -392,7 +396,7 @@ def find_notable_searcher_builder_relationships(map, threshold):
     #         builder_percents[builder] = percent
     #         if percent > threshold:
     #             notable[searcher] = builder_percents
-    cutoff = 15
+    cutoff = 20
     i = 0
     builder_market_share = get_builder_market_share_percentage(map)
     for searcher, builders in searcher_builder_map.items():

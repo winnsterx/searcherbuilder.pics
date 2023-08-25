@@ -123,7 +123,7 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
         # Create a ThreadPoolExecutor
         start = time.time()
         print("starting to go thru blocks")
-        with ThreadPoolExecutor(max_workers=64) as executor:
+        with ThreadPoolExecutor(max_workers=32) as executor:
             # Use the executor to submit the tasks
             futures = [executor.submit(analyze_block, session, zeromev_url, block_number, block, fetched_internal_transfers,
                                        builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,

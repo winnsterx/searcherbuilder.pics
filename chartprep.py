@@ -30,10 +30,19 @@ def abbreviate_label(label, short=False):
     else:
         return label
 
-def create_searcher_builder_sankey(map, agg, title, unit, date):
+
+def get_builder_colors_map(list_of_builders):
+    colors = sns.color_palette(cc.glasbey_hv, len(list_of_builders))
+    # random.shuffle(colors)
+    builder_color_map = {builder: color for builder, color in zip(list_of_builders, colors)}
+    return builder_color_map
+
+
+
+def create_searcher_builder_sankey(map, agg, builder_color_map, title, unit, date):
     # nodes is index of searcher + builder, each unique
     # an entity will now be recognized as the index from this list now
-    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;">({} from {} to {})</span></span>'     
+    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;font-weight:normal">({} from {} to {})</span></span>'     
     # span = "<span style=&quot;font-size: 24px;font-weight:bold;&quot;>MEV-Boost Block Flow<br /><span style='font-size:14px;'>(last 30 days)</span></span>"
     searcher_builder_map = analysis.create_searcher_builder_map(map)
     # nodes = sorted_searchers + list(map.keys())
@@ -109,7 +118,7 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count):
     return map, agg
 
 
-def create_three_sankeys_by_metric(all_maps_and_agg, metric, unit, percentile, min_count):
+def create_three_sankeys_by_metric(all_maps_and_agg, builder_color_map, metric, unit, percentile, min_count):
     for i in range(0, len(all_maps_and_agg), 2):
         map = all_maps_and_agg[i]
         agg = all_maps_and_agg[i+1]
@@ -117,8 +126,8 @@ def create_three_sankeys_by_metric(all_maps_and_agg, metric, unit, percentile, m
         all_maps_and_agg[i] = map
         all_maps_and_agg[i+1] = agg
 
-    atomic_fig = create_searcher_builder_sankey(all_maps_and_agg[0], all_maps_and_agg[1], f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit, ("7/1", "8/1"))
-    nonatomic_fig = create_searcher_builder_sankey(all_maps_and_agg[2], all_maps_and_agg[3], f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit, ("7/1", "8/1"))
+    atomic_fig = create_searcher_builder_sankey(all_maps_and_agg[0], all_maps_and_agg[1], builder_color_map, f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit, ("7/1", "8/1"))
+    nonatomic_fig = create_searcher_builder_sankey(all_maps_and_agg[2], all_maps_and_agg[3], builder_color_map, f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit, ("7/1", "8/1"))
     # combined_fig = create_searcher_builder_sankey(all_maps_and_agg[4], all_maps_and_agg[5], f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit,  ("7/1", "8/1"))
 
     return atomic_fig, nonatomic_fig, nonatomic_fig
@@ -158,13 +167,18 @@ def calculate_highlight_figures():
     return num_atomic, num_nonatomic, atomic_tot_vol, nonatomic_tot_vol, atomic_tot_tx, nonatomic_tot_tx
 
 
-def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
+def create_notable_searcher_builder_percentage_bar_chart(map, metric, mev_domain, builder_color_map, threshold=50):
     fig = go.Figure()
     notable, builder_market_share, highlight_relationship = analysis.find_notable_searcher_builder_relationships(map, threshold)
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable {} Searchers & Builders Relationships<br /><span style="font-size: 13px;">(Highlighting relationships where a searcher\'s {} are captured in<br />a builder\'s blocks at rates > 2x their typical market share)</span></span>'     
+    title_layout = {
+        'text': span.format(mev_domain, metric),
+        'y':0.9,
+        'x':0.5,
+        'xanchor': 'center',
+        'yanchor': 'top'
+    }
 
-    colors = sns.color_palette(cc.glasbey_hv, len(list(map.keys())))
-    # random.shuffle(colors)
-    builder_color_map = {builder: color for builder, color in zip(list(map.keys()), colors)}
 
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
@@ -187,7 +201,7 @@ def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
 
         # Trace for non-highlighted bars
         fig.add_trace(go.Bar(
-            y=[abbreviate_label(s) for s in y_regular[::-1]],
+            y=[abbreviate_label(s,True) for s in y_regular[::-1]],
             x=x_regular[::-1],
             name=abbreviate_label(builder, True),
             orientation="h",
@@ -202,7 +216,7 @@ def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
 
         # Trace for highlighted bars
         fig.add_trace(go.Bar(
-            y=[abbreviate_label(s) for s in y_highlighted[::-1]],
+            y=[abbreviate_label(s, True) for s in y_highlighted[::-1]],
             x=x_highlighted[::-1],
             name=abbreviate_label(builder, True),
             orientation="h",
@@ -216,19 +230,19 @@ def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
 
         
     fig.update_layout(
-        title="Notable Searcher Builder Relationships",
-        xaxis_title="Percentage of Txs",
+        title=title_layout,
+        xaxis_title=f"Percentage of {metric.capitalize()}",
         yaxis_title="",
         xaxis_range=[0, 100],
         barmode="stack",
         legend={'traceorder':'normal'},
-        # margin={"l":20, "t":20},
+        margin={"t":150}, # what gives the spacing between title and plot
         font=dict(
             family="Courier New, monospace",
             color="black"
-        ),        
+        ),       
         autosize=False,
-        height=500,
+        height=600,
     )
 
     return fig
@@ -238,9 +252,9 @@ def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
 
 
 
-def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
+def create_searcher_builder_percentage_bar_chart(map, agg, builder_color_map, title, metric):
     fig = go.Figure()
-    top_searchers = analysis.slice_dict(agg, 100)
+    top_searchers = analysis.slice_dict(agg, 20)
     builder_market_share = {}
 
     for builder, searchers in map.items():
@@ -266,9 +280,10 @@ def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
             name=abbreviate_label(builder, True),
             orientation="h",
             hovertemplate='<b>%{x:.2r}%<b> ',
-            # marker=dict(
-            #     line=dict(width=1)
-            # )
+            marker=dict(
+                color=f"rgb{builder_color_map[builder]}",
+                line=dict(width=1)
+            ),
         ))
 
 
@@ -285,16 +300,16 @@ def create_searcher_builder_percentage_bar_chart(map, agg, title, metric):
             color="black"
         ),        
         autosize=False,
-        height=2200,
+        height=600,
     )
 
     return fig
 
 
-def create_three_bar_charts_by_metric(all_maps_and_agg, metric, unit):
-    atomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[0], all_maps_and_agg[1], f"Atomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
-    nonatomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[2], all_maps_and_agg[3], f"Nonatomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
-    combined_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[4], all_maps_and_agg[5], f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+def create_three_bar_charts_by_metric(all_maps_and_agg, metric, unit, builder_color_map):
+    atomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[0], all_maps_and_agg[1], builder_color_map, f"Atomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+    nonatomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[2], all_maps_and_agg[3], builder_color_map, f"Nonatomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
+    combined_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[4], all_maps_and_agg[5], builder_color_map, f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
 
     return atomic_fig, nonatomic_fig, combined_fig
 
@@ -413,20 +428,32 @@ if __name__ == "__main__":
     # all_maps_and_aggs_vol = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
     # all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
     # dump_data_used([all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
+    
+    atomic_map_tx = analysis.load_dict_from_json("important_data/tx/atomic_map_tx.json")
+    nonatomic_map_tx = analysis.load_dict_from_json("important_data/tx/nonatomic_map_tx.json")
+    combined_map_tx = analysis.load_dict_from_json("important_data/tx/combined_map_tx.json")
 
+    atomic_agg_tx = analysis.load_dict_from_json("important_data/tx/atomic_agg_tx.json")
+    nonatomic_agg_tx = analysis.load_dict_from_json("important_data/tx/nonatomic_agg_tx.json")
+    combined_agg_tx = analysis.load_dict_from_json("important_data/tx/combined_agg_tx.json")
+
+    all_maps_and_aggs_tx = [atomic_map_tx, atomic_agg_tx, nonatomic_map_tx, nonatomic_agg_tx, combined_map_tx, combined_agg_tx]
+
+    all_builders = list(atomic_map_tx.keys()) + list(set(nonatomic_map_tx.keys()) - set(list(atomic_map_tx.keys())))
+    builder_color_map = get_builder_colors_map(all_builders)
 
     # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, "vol", "USD")
-    # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
+    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count", builder_color_map)
     # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
-    interesting = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("data/tx/atomic_map_tx.json"))
-    interesting_nonatomic = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("data/tx/nonatomic_map_tx.json"), 70)
+    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(atomic_map_tx, "transactions", "Atomic", builder_color_map)
+    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("important_data/tx/nonatomic_map_tx.json"), "transactions", "Non-atomic", builder_color_map)
     # atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
-    # atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, "tx", "number of transactions", 0.95, 5)
+    atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, builder_color_map, "tx", "number of transactions", 0.95, 5)
     # atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
 
-    # atomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx", "tx count")
-    # nonatomic_searcher_pie_vol = create_searcher_pie_chart(all_maps_and_aggs_vol[3], "Noatomic Searchers", "Market Shares", "vol", "USD")
-    # combined_searcher_pie_bribe = create_searcher_pie_chart(all_maps_and_aggs_bribe[5], "Combined Searchers Market Shares", "", "bribe", "ETH", True)
+    atomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx", "tx count")
+    nonatomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[3], "Noatomic Searchers", "Market Shares", "tx", "tx count")
+    combined_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[5], "Combined Searchers Market Shares", "", "tx", "tx count", True)
     
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
     head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
@@ -441,16 +468,16 @@ if __name__ == "__main__":
         dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            interesting_nonatomic, 
-            # interesting_nonatomic,
-            # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
-            # dp.Group(
-            #     atomic_searcher_pie_tx,
-            #     nonatomic_searcher_pie_vol,
-            #     columns=2
-            # ),
-            # combined_searcher_pie_bribe,
-            # atomic_fig_tx,
+            atomic_notable_bar,
+            nonatomic_notable_bar, 
+            atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
+            dp.Group(
+                atomic_searcher_pie_tx,
+                nonatomic_searcher_pie_tx,
+                columns=2
+            ),
+            combined_searcher_pie_tx,
+            atomic_fig_tx,
             # nonatomic_fig_vol,
             # combined_fig_bribe
         ]),
@@ -461,21 +488,21 @@ if __name__ == "__main__":
             # atomic_fig_vol,
             # nonatomic_fig_vol, 
         ]),
-        # dp.Page(title="Transaction Count", blocks=[
-        #     title, 
-        #     head, 
-        #     atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
-        #     atomic_fig_tx,
-        #     nonatomic_fig_tx,
-        # ]),
-        # dp.Page(title="Bribes", blocks=[
-        #     title, 
-        #     head, 
-        #     atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
-        #     atomic_fig_bribe,
-        #     nonatomic_fig_bribe,
-        #     combined_fig_bribe,
-        # ])
+        dp.Page(title="Transaction Count", blocks=[
+            title, 
+            head, 
+            atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
+            atomic_fig_tx,
+            nonatomic_fig_tx,
+        ]),
+        dp.Page(title="Bribes", blocks=[
+            title, 
+            head, 
+            # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
+            # atomic_fig_bribe,
+            # nonatomic_fig_bribe,
+            # combined_fig_bribe,
+        ])
     )
     dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")
 
