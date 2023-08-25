@@ -10,7 +10,8 @@ import nonatomic_mev
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
 # contract is ignored if it is a known router, dex, etc
-def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
+def analyze_tx(builder, tx, full_tx, transfer_map, addrs_counted_in_block, 
+               builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
     mev_type = tx['mev_type']
 
     addr_to = tx['address_to'].lower()
@@ -38,6 +39,10 @@ def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builde
         builder_atomic_map_profit[builder][addr_to]["total"] += profit
         builder_atomic_map_vol[builder][addr_to]["total"] += volume
 
+        if addr_to not in addrs_counted_in_block:
+            builder_atomic_map_block[builder][addr_to] += 1
+            addrs_counted_in_block.add(addr_to)
+
     elif mev_type == "backrun":
         # counting both txs in a sandwich
         builder_atomic_map_tx[builder][addr_to][mev_type] += 1
@@ -48,6 +53,11 @@ def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builde
         builder_atomic_map_tx[builder][addr_to]["total"] += 1
         builder_atomic_map_profit[builder][addr_to]["total"] += profit
 
+        if addr_to not in addrs_counted_in_block:
+            builder_atomic_map_block[builder][addr_to] += 1
+            addrs_counted_in_block.add(addr_to)
+
+
     elif mev_type == "liquid":
         # addr_from here, bc liquidation doesnt use special contracts but EOA 
         builder_atomic_map_tx[builder][addr_from][mev_type] += 1
@@ -56,6 +66,11 @@ def analyze_tx(builder, tx, full_tx, transfer_map, builder_atomic_map_tx, builde
         builder_atomic_map_tx[builder][addr_from]["total"] += 1
         builder_atomic_map_profit[builder][addr_from]["total"] += profit
         builder_atomic_map_vol[builder][addr_from]["total"] += volume
+
+        if addr_from not in addrs_counted_in_block:
+            builder_atomic_map_block[builder][addr_from] += 1
+            addrs_counted_in_block.add(addr_from)
+
 
 
 
@@ -158,18 +173,21 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     return builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe
 
 
-def compile_atomic_data(builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
+def compile_atomic_data(builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe):
+    analysis.dump_dict_to_json(builder_atomic_map_block, "atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json")
     analysis.dump_dict_to_json(builder_atomic_map_tx, "atomic/fifty/builder_atomic_maps/builder_atomic_map_tx.json")
     analysis.dump_dict_to_json(builder_atomic_map_profit, "atomic/fifty/builder_atomic_maps/builder_atomic_map_profit.json")
     analysis.dump_dict_to_json(builder_atomic_map_vol, "atomic/fifty/builder_atomic_maps/builder_atomic_map_vol.json")
     analysis.dump_dict_to_json(builder_atomic_map_coin_bribe, "atomic/fifty/builder_atomic_maps/builder_atomic_map_coin_bribe.json")
     analysis.dump_dict_to_json(builder_atomic_map_gas_bribe, "atomic/fifty/builder_atomic_maps/builder_atomic_map_gas_bribe.json")
 
+    agg_block = analysis.aggregate_block_count(builder_atomic_map_block)
     agg_tx = analysis.aggregate_atomic_searchers(builder_atomic_map_tx)
     agg_profit = analysis.aggregate_atomic_searchers(builder_atomic_map_profit)
     agg_vol = analysis.aggregate_atomic_searchers(builder_atomic_map_vol)
     agg_coin = analysis.aggregate_atomic_searchers(builder_atomic_map_coin_bribe)
     agg_gas = analysis.aggregate_atomic_searchers(builder_atomic_map_gas_bribe)
+    analysis.dump_dict_to_json(agg_block, "atomic/fifty/agg/agg_block.json")
     analysis.dump_dict_to_json(agg_tx, "atomic/fifty/agg/agg_tx.json")
     analysis.dump_dict_to_json(agg_profit, "atomic/fifty/agg/agg_profit.json")
     analysis.dump_dict_to_json(agg_vol, "atomic/fifty/agg/agg_vol.json")

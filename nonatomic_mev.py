@@ -79,11 +79,13 @@ def followed_by_transfer_to_builder(fee_recipient, cur_tx, next_tx):
 
 
 # analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas)
-def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas,
-               builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas, addrs_counted_in_block,
+               builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
                builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     tx_index = swap['tx_index']
     tx_volume = swap.get('user_swap_volume_usd', 0) or 0
+    addr_to = swap['address_to'].lower()
+    addr_from = swap['address_from'].lower()
 
     if full_tx["hash"] in transfer_map.keys(): 
         builder_nonatomic_map_tx[builder][transfer_map[full_tx['hash']]["from"]] += 1
@@ -95,25 +97,33 @@ def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map
             "builder": builder,
             "bribe": transfer_map[full_tx['hash']]["value"]
         })
+        if addr_to not in addrs_counted_in_block:
+            builder_nonatomic_map_block[builder][addr_to] += 1
+            addrs_counted_in_block.add(addr_to)
+
     # if followed by a direct transfer to builder
     elif followed_by_transfer_to_builder(fee_recipient, full_tx, full_next_tx) == True:
         # mev bot collected here will be an EOA
-        builder_nonatomic_map_tx[builder][full_tx["from"]] += 1
-        builder_nonatomic_map_vol[builder][full_tx["from"]] += tx_volume
-        builder_nonatomic_map_coin_bribe[builder][full_tx["from"]] += full_next_tx["value"]
+        builder_nonatomic_map_tx[builder][addr_from] += 1
+        builder_nonatomic_map_vol[builder][addr_from] += tx_volume
+        builder_nonatomic_map_coin_bribe[builder][addr_from] += full_next_tx["value"]
         
-        after_bribe.setdefault(full_tx["from"], []).append({
+        after_bribe.setdefault(addr_from, []).append({
             "hash": full_tx["hash"],
             "builder": builder,
             "bribe": full_next_tx["value"]
         })
+        if addr_from not in addrs_counted_in_block:
+            builder_nonatomic_map_block[builder][addr_from] += 1
+            addrs_counted_in_block.add(addr_from)
+
     # if within top of block (first 10%):
     elif tx_index <= top_of_block_boundary:
-        builder_nonatomic_map_tx[builder][full_tx["to"]] += 1
-        builder_nonatomic_map_vol[builder][full_tx["to"]] += tx_volume
-        builder_nonatomic_map_gas_bribe[builder][full_tx["to"]] += full_tx["gas"] * full_tx["gasPrice"]
+        builder_nonatomic_map_tx[builder][addr_to] += 1
+        builder_nonatomic_map_vol[builder][addr_to] += tx_volume
+        builder_nonatomic_map_gas_bribe[builder][addr_to] += full_tx["gas"] * full_tx["gasPrice"]
 
-        tob_bribe.setdefault(full_tx["to"], []).append({
+        tob_bribe.setdefault(addr_to, []).append({
             "hash": full_tx['hash'],
             "builder": builder,
             "index": tx_index,
@@ -121,6 +131,9 @@ def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map
             "gas": full_tx['gas'],
             "block_median_gas": median_gas,
         })
+        if addr_to not in addrs_counted_in_block:
+            builder_nonatomic_map_block[builder][addr_to] += 1
+            addrs_counted_in_block.add(addr_to)
 
 
 # Given a block and its txs, get all the valid swap txs in that block, check that the swap txs 
@@ -180,17 +193,20 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     # lower threshold nets mev bots without adding false positives. 
     # will we include swaps that are actually not MEV, if we lower the threshold? 
 
-def compile_cefi_defi_data(builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
+def compile_cefi_defi_data(builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     # trimmed_map = searcher_db.clean_up(builder_nonatomic_map, 5)
+    analysis.dump_dict_to_json(builder_nonatomic_map_block, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_block.json")
     analysis.dump_dict_to_json(builder_nonatomic_map_tx, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_tx.json")
     analysis.dump_dict_to_json(builder_nonatomic_map_vol, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_vol.json")
     analysis.dump_dict_to_json(builder_nonatomic_map_coin_bribe, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json")
     analysis.dump_dict_to_json(builder_nonatomic_map_gas_bribe, "nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json")
 
+    agg_block = analysis.aggregate_block_count(builder_nonatomic_map_block)
     agg_tx = analysis.create_sorted_agg_from_map(builder_nonatomic_map_tx)
     agg_vol = analysis.create_sorted_agg_from_map(builder_nonatomic_map_vol)
     agg_coin = analysis.create_sorted_agg_from_map(builder_nonatomic_map_coin_bribe)
     agg_gas = analysis.create_sorted_agg_from_map(builder_nonatomic_map_gas_bribe)
+    analysis.dump_dict_to_json(agg_block, "nonatomic/fifty/agg/agg_block.json")
     analysis.dump_dict_to_json(agg_tx, "nonatomic/fifty/agg/agg_tx.json")
     analysis.dump_dict_to_json(agg_vol, "nonatomic/fifty/agg/agg_vol.json")
     analysis.dump_dict_to_json(agg_coin, "nonatomic/fifty/agg/agg_coin.json")

@@ -4,3 +4,4 @@ blocks_*.json
 block_data/
 atomic/
 nonatomic/
+internal_transfers_data/

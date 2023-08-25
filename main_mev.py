@@ -17,27 +17,27 @@ def map_extra_data_to_builder(extra_data, feeRecipient):
 
 
 def analyze_tx(builder, fee_recipient, tx, full_tx, full_next_tx, transfer_map, 
-               top_of_block_boundary, median_gas,
-               builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
+               top_of_block_boundary, median_gas, addrs_counted_in_block,
+               builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
                builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
-               builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+               builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
                builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
 
     mev_type = tx['mev_type']
     if mev_type == "swap" or mev_type == "sandwich":
-        nonatomic_mev.analyze_tx(builder, fee_recipient, tx, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas,
-               builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+        nonatomic_mev.analyze_tx(builder, fee_recipient, tx, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas, addrs_counted_in_block,
+               builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
                builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
     else:
-        atomic_mev.analyze_tx(builder, tx, full_tx, transfer_map, 
-                              builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
+        atomic_mev.analyze_tx(builder, tx, full_tx, transfer_map, addrs_counted_in_block,
+                              builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
                               builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe)
 
 # processes addr_tos of all MEV txs in a block
 def analyze_block(session, url, block_number, block, fetched_internal_transfers, 
-                  builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
+                  builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
                   builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
-                  builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+                  builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
                   builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
     try: 
         total_txs = len(block["transactions"])
@@ -61,8 +61,14 @@ def analyze_block(session, url, block_number, block, fetched_internal_transfers,
         }
         res = session.get(url, params=payload)
 
+        
         if (int(block_number) - 17595510) % 500 == 0:
             print(block_number)
+
+        builder_atomic_map_block[builder]['total'] += 1
+        builder_nonatomic_map_block[builder]['total'] += 1
+
+        addrs_counted_in_block = set()
 
         if res.status_code == 200:
             data = res.json()
@@ -73,10 +79,10 @@ def analyze_block(session, url, block_number, block, fetched_internal_transfers,
                 else: 
                     full_next_tx = block["transactions"][tx['tx_index']+1]
                 analyze_tx(builder, fee_recipient, tx, full_tx, full_next_tx, transfer_map, 
-                            top_of_block_boundary, median_gas,
-                            builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
+                            top_of_block_boundary, median_gas, addrs_counted_in_block,
+                            builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
                             builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
-                            builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
+                            builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
                             builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
                                 
         else: 
@@ -86,15 +92,24 @@ def analyze_block(session, url, block_number, block, fetched_internal_transfers,
         print(traceback.format_exc())
 
 
+def default_block_dic():
+    # Create a defaultdict that defaults to 0
+    inner = defaultdict(int)
+    # But initialize 'total' to 0 explicitly
+    inner['total'] = 0
+    return inner
+
 def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
+    builder_atomic_map_block = defaultdict(default_block_dic)
     builder_atomic_map_tx = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
     builder_atomic_map_profit = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
     builder_atomic_map_vol = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
     builder_atomic_map_coin_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
     builder_atomic_map_gas_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
-
+    
+    builder_nonatomic_map_block = defaultdict(default_block_dic)
     builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
     builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
     builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
@@ -111,14 +126,14 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [executor.submit(analyze_block, session, zeromev_url, block_number, block, fetched_internal_transfers,
-                                       builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
-                                       builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
+                                       builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
+                                       builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
                                        coinbase_bribe, after_bribe, tob_bribe) for block_number, block in fetched_blocks.items()]
             for future in as_completed(futures):
                 pass
         print("finished counting in", time.time() - start, " seconds")
     
-    return builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
+    return builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
 
 
 if __name__ == "__main__":
@@ -132,9 +147,9 @@ if __name__ == "__main__":
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks for atomic.")
-    builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
+    builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 
-    atomic_mev.compile_atomic_data(builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe)
-    nonatomic_mev.compile_cefi_defi_data(builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
+    atomic_mev.compile_atomic_data(builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe)
+    nonatomic_mev.compile_cefi_defi_data(builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)

@@ -193,8 +193,24 @@ def aggregate_atomic_searchers(builder_atomic_map):
     for _, searchers in builder_atomic_map.items():
         for searcher, counts in searchers.items():
             agg[searcher] += counts["total"]
-    agg = {k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)}
+    agg = sort_agg(agg)
     return agg
+
+
+def aggregate_block_count(builder_searcher_map_block):
+    agg = defaultdict(int)
+    for _, searchers in builder_searcher_map_block.items():
+        for searcher, count in searchers.items():
+            if searcher == "total":
+                continue
+            else:
+                agg[searcher] += count
+    agg = sort_agg(agg)
+    return agg
+                
+
+
+
 
 def prune_known_entities_from_map_and_agg(map, agg):
     agg = prune_known_entities_from_agg(agg)
@@ -366,7 +382,7 @@ def find_notable_searcher_builder_relationships(map, threshold):
     notable = defaultdict(lambda: defaultdict(int))
     highlight_relationship = set()
     # notable = set()
-    searcher_builder_map = create_searcher_builder_map(map)
+    searcher_builder_map = sort_map(create_searcher_builder_map(map))
 
     # for searcher, builders in searcher_builder_map.items():
     #     builder_percents = defaultdict(int)
@@ -376,14 +392,18 @@ def find_notable_searcher_builder_relationships(map, threshold):
     #         builder_percents[builder] = percent
     #         if percent > threshold:
     #             notable[searcher] = builder_percents
-
+    cutoff = 15
+    i = 0
     builder_market_share = get_builder_market_share_percentage(map)
     for searcher, builders in searcher_builder_map.items():
+        if i >= cutoff:
+            break
         total_count = sum(builders.values())
         for builder, count in builders.items():
             percent = count / total_count * 100 
             builder_usual_percent = builder_market_share[builder]
             if percent > builder_usual_percent * (1 + tolerance) and percent > 10:
+                i += 1
                 highlight_relationship.add((searcher, builder))
                 print(searcher, builder, percent, builder_usual_percent)
                 notable[searcher] = {builder: (count / total_count) * 100 for builder, count in builders.items()}
@@ -403,10 +423,13 @@ if __name__ == "__main__":
     # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
     
     # nonatomic_fig.show()
-    gas_map = load_dict_from_json("atomic/new/builder_atomic_maps/builder_atomic_map_gas.json")
-    coin_map = load_dict_from_json("atomic/new/builder_atomic_maps/builder_atomic_map_coin.json")
-
-    combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic=True)
+    blocks_agg = load_dict_from_json("atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json")
+    tally = 0
+    for builder, searchers in blocks_agg.items():
+        tally += searchers['total']
+    
+    right_tally = len(load_dict_from_json("block_data/two_blocks.json"))
+    print(right_tally, tally)
 
     # searcher_flow = {}
     # for builder, searchers in nonatomic_map.items():

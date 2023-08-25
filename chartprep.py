@@ -228,7 +228,7 @@ def create_notable_searcher_builder_percentage_bar_chart(map, threshold=50):
             color="black"
         ),        
         autosize=False,
-        height=1200,
+        height=500,
     )
 
     return fig
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count")
     # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
     interesting = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("data/tx/atomic_map_tx.json"))
-    # interesting_nonatomic = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_vol[2], 70)
+    interesting_nonatomic = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("data/tx/nonatomic_map_tx.json"), 70)
     # atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
     # atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, "tx", "number of transactions", 0.95, 5)
     # atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
@@ -441,7 +441,7 @@ if __name__ == "__main__":
         dp.Page(title="Highlights", blocks=[
             title, 
             head, 
-            interesting, 
+            interesting_nonatomic, 
             # interesting_nonatomic,
             # atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
             # dp.Group(
