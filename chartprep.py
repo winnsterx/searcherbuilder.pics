@@ -134,10 +134,10 @@ def create_three_sankeys_by_metric(all_maps_and_agg, builder_color_map, metric, 
 
 
 def calculate_highlight_figures():
-    atomic_agg = analysis.load_dict_from_json("atomic/new/agg/agg_vol.json")
+    atomic_agg = analysis.load_dict_from_json("atomic/fifty/agg/agg_vol.json")
     atomic_agg = analysis.remove_known_entities_from_agg(atomic_agg)
 
-    nonatomic_agg = analysis.load_dict_from_json("nonatomic/new/agg/agg_vol.json")
+    nonatomic_agg = analysis.load_dict_from_json("nonatomic/fifty/agg/agg_vol.json")
     nonatomic_agg = analysis.remove_known_entities_from_agg(nonatomic_agg)
     # since atomic is needed, dont get atomic by range until after this
     nonatomic_agg = analysis.remove_atomic_from_agg(nonatomic_agg, atomic_agg)
@@ -151,10 +151,10 @@ def calculate_highlight_figures():
     atomic_tot_vol = analysis.humanize_number(int(sum(atomic_agg.values())))
     nonatomic_tot_vol = analysis.humanize_number(sum(nonatomic_agg.values()))
 
-    atomic_agg = analysis.load_dict_from_json("atomic/new/agg/agg_tx.json")
+    atomic_agg = analysis.load_dict_from_json("atomic/fifty/agg/agg_tx.json")
     atomic_agg = analysis.remove_known_entities_from_agg(atomic_agg)
 
-    nonatomic_agg = analysis.load_dict_from_json("nonatomic/new/agg/agg_tx.json")
+    nonatomic_agg = analysis.load_dict_from_json("nonatomic/fifty/agg/agg_tx.json")
     nonatomic_agg = analysis.remove_known_entities_from_agg(nonatomic_agg)
     nonatomic_agg = analysis.remove_atomic_from_agg(nonatomic_agg, atomic_agg)
 
@@ -170,15 +170,7 @@ def calculate_highlight_figures():
 def create_notable_searcher_builder_percentage_bar_chart(map, metric, mev_domain, builder_color_map, threshold=50):
     fig = go.Figure()
     notable, builder_market_share, highlight_relationship = analysis.find_notable_searcher_builder_relationships(map, threshold)
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable {} Searchers & Builders Relationships<br /><span style="font-size: 13px;">(Highlighting relationships where a searcher\'s {} are captured in<br />a builder\'s blocks at rates > 2x their typical market share)</span></span>'     
-    title_layout = {
-        'text': span.format(mev_domain, metric),
-        'y':0.9,
-        'x':0.5,
-        'xanchor': 'center',
-        'yanchor': 'top'
-    }
-
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable {} Searcher-Builder Relationships<br /><span style="font-size: 13px;">(Highlighting relationships where a searcher is captured in<br />a builder\'s blocks at rates > 2x their overall market share)</span></span>'     
 
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
@@ -228,7 +220,14 @@ def create_notable_searcher_builder_percentage_bar_chart(map, metric, mev_domain
             legendgroup=builder  # Use builder as legendgroup identifier
         ))
 
-        
+    title_layout = {
+        'text': span.format(mev_domain),
+        'y':0.9,
+        'x':0.5,
+        'xanchor': 'center',
+        'yanchor': 'top'
+    }
+
     fig.update_layout(
         title=title_layout,
         xaxis_title=f"Percentage of {metric.capitalize()}",
@@ -370,10 +369,10 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, unit, legend=False)
 
 
 def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
-    atomic_map = analysis.load_dict_from_json(f"atomic/new/builder_atomic_maps/builder_atomic_map_{metric}.json")
-    atomic_agg = analysis.load_dict_from_json(f"atomic/new/agg/agg_{metric}.json")
-    nonatomic_map = analysis.load_dict_from_json(f"nonatomic/new/builder_swapper_maps/builder_swapper_map_{metric}.json")
-    nonatomic_agg = analysis.load_dict_from_json(f"nonatomic/new/agg/agg_{metric}.json")
+    atomic_map = analysis.load_dict_from_json(f"atomic/fifty/builder_atomic_maps/builder_atomic_map_{metric}.json")
+    atomic_agg = analysis.load_dict_from_json(f"atomic/fifty/agg/agg_{metric}.json")
+    nonatomic_map = analysis.load_dict_from_json(f"nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_{metric}.json")
+    nonatomic_agg = analysis.load_dict_from_json(f"nonatomic/fifty/agg/agg_{metric}.json")
 
     # before, atomic_map is {total, arb,...}. after this, atomic is simple
     atomic_agg = analysis.sort_agg(atomic_agg)
@@ -396,10 +395,33 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     return [atomic_map, atomic_agg, nonatomic_map, nonatomic_agg, combined_map, combined_agg]
 
 
+def return_sorted_block_map_and_agg_pruned(metric="block"):
+    # {builder: {total: x, searcher: x}}
+    atomic_map = analysis.load_dict_from_json(f"atomic/fifty/builder_atomic_maps/builder_atomic_map_{metric}.json")
+    atomic_agg = analysis.load_dict_from_json(f"atomic/fifty/agg/agg_{metric}.json")
+    nonatomic_map = analysis.load_dict_from_json(f"nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_{metric}.json")
+    nonatomic_agg = analysis.load_dict_from_json(f"nonatomic/fifty/agg/agg_{metric}.json")
+    
+    atomic_map, atomic_agg = analysis.prune_known_entities_from_map_and_agg(atomic_map, atomic_agg)
+    nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(nonatomic_map, nonatomic_agg)
+    
+    atomic_agg = analysis.sort_agg(atomic_agg)
+    atomic_map = analysis.sort_map(atomic_map)
+    nonatomic_agg = analysis.sort_agg(nonatomic_agg)
+    nonatomic_map = analysis.sort_map(nonatomic_map)
+
+    combined_map, combined_agg = analysis.combine_atomic_nonatomic_block_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg)
+    combined_agg = analysis.sort_agg(combined_agg)
+    combined_map = analysis.sort_map(combined_map)
+
+    return [atomic_map, atomic_agg, nonatomic_map, nonatomic_agg, combined_map, combined_agg]
+    
 def dump_data_used(all):
-    # [tx, vol, bribe]
+    # [block, tx, vol, bribe]
     for i in range(0, len(all)):
         if i == 0:
+            type = "block"
+        elif i == 1:
             type = "tx"
         elif i == 1:
             type = "vol"
@@ -423,7 +445,7 @@ def dump_data_used(all):
 
 
 def load_maps_and_aggs_from_dir(metric):
-    path = f"important_data/{metric}/"
+    path = f"data/{metric}/"
     atomic_map = analysis.load_dict_from_json(path + f"atomic_map_{metric}.json")
     nonatomic_map = analysis.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
     combined_map = analysis.load_dict_from_json(path + f"combined_map_{metric}.json")
@@ -435,26 +457,27 @@ def load_maps_and_aggs_from_dir(metric):
 
 
 if __name__ == "__main__":
+    all_builders = list(analysis.load_dict_from_json("atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json").keys())
+    # all_maps_and_aggs_block = return_sorted_block_map_and_agg_pruned()    
     # all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("tx")
     # all_maps_and_aggs_vol = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
     # all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
-    # dump_data_used([all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
+    # dump_data_used([all_maps_and_aggs_block, all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
     
-
+    all_maps_and_aggs_block = load_maps_and_aggs_from_dir("block")    
     all_maps_and_aggs_tx = load_maps_and_aggs_from_dir("tx")
     all_maps_and_aggs_vol = load_maps_and_aggs_from_dir("vol")
     all_maps_and_aggs_bribe = load_maps_and_aggs_from_dir("bribe")
 
-    all_builders = list(all_maps_and_aggs_tx[0].keys()) + list(set(all_maps_and_aggs_tx[2].keys()) - set(list(all_maps_and_aggs_tx[0].keys())))
     builder_color_map = get_builder_colors_map(all_builders)
+
+    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_block[0], "block", "Atomic", builder_color_map)
+    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_block[2], "block", "Non-atomic", builder_color_map)
 
     atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, builder_color_map, "vol", "USD")
     atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, builder_color_map, "tx", "Transaction Count")
     atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, builder_color_map,"bribe", "ETH")
-    
-    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_tx[0], "transactions", "Atomic", builder_color_map)
-    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("important_data/tx/nonatomic_map_tx.json"), "transactions", "Non-atomic", builder_color_map)
-    
+        
     atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, builder_color_map, "vol", "USD", 0.95, 5000)
     atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, builder_color_map, "tx", "number of transactions", 0.95, 5)
     atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, builder_color_map, "bribe", "ETH", 0.95, 5)
@@ -464,7 +487,7 @@ if __name__ == "__main__":
     combined_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[5], "Combined Searchers Market Shares", "", "tx", "tx count", True)
     
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
-    head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/1</div>" 
+    head = ("<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from 7/1 to 8/20</div>" 
                 +'<div style ="float:right;font-size:18px;color:#0F1419">View <a href="https://github.com/winnsterx/searcher_database/tree/main/data">raw data</a> </div></div>'
                 +'<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
                 +'<a href="https://twitter.com/winnsterx">winnsterx</a> & inspired by '
@@ -495,6 +518,7 @@ if __name__ == "__main__":
             atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
             atomic_fig_vol,
             nonatomic_fig_vol, 
+            combined_fig_vol,
         ]),
         dp.Page(title="Transaction Count", blocks=[
             title, 
@@ -502,6 +526,7 @@ if __name__ == "__main__":
             atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
             atomic_fig_tx,
             nonatomic_fig_tx,
+            combined_fig_tx
         ]),
         dp.Page(title="Bribes", blocks=[
             title, 

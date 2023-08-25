@@ -289,7 +289,29 @@ def combine_atomic_nonatomic_map_and_agg(atomic_map, atomic_agg, nonatomic_map, 
 
     return total_map, total_agg
 
+def combine_atomic_nonatomic_block_map_and_agg(atomic_map, atomic_agg, nonatomic_map, nonatomic_agg):
+    total_map = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in atomic_map.items():
+        for searcher, stat in searchers.items():
+            if searcher == "total":
+                total_map[builder]['total'] = stat
+            else:
+                total_map[builder][searcher] += stat
+    
+    for builder, searchers in nonatomic_map.items():
+        for searcher, stat in searchers.items():
+            if searcher == "total":
+                total_map[builder]['total'] = stat
+            else:
+                total_map[builder][searcher] += stat
 
+    total_agg = defaultdict(int)
+    for searcher, count in atomic_agg.items():
+        total_agg[searcher] += count
+    for searcher, count in nonatomic_agg.items():
+        total_agg[searcher] += count
+
+    return total_map, total_agg
 
 
 
@@ -311,7 +333,7 @@ def create_sorted_agg_from_map(map):
     return res
 
 
-def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
+def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic, dir):
     wei_per_eth = 10**18 
 
     if is_atomic:
@@ -333,10 +355,10 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
                 res[builder][searcher]["liquid"] += stats["liquid"] 
 
         res = sort_atomic_map_by_total(res)
-        dump_dict_to_json(res, "atomic/new/builder_atomic_maps/builder_atomic_map_bribe.json")
+        dump_dict_to_json(res, f"atomic/{dir}/builder_atomic_maps/builder_atomic_map_bribe.json")
         res = prune_known_entities_from_atomic_map(res)
         agg = create_sorted_agg_from_map(res)
-        dump_dict_to_json(agg, "atomic/new/agg/agg_bribe.json")
+        dump_dict_to_json(agg, f"atomic/{dir}/agg/agg_bribe.json")
     else: 
         res = defaultdict(lambda : defaultdict(int))
         for builder, searchers in gas_map.items():
@@ -347,10 +369,10 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
             for searcher, coin in searchers.items():
                 res[builder][searcher] += coin
         res = sort_map(res)
-        dump_dict_to_json(res, "nonatomic/new/builder_swapper_maps/builder_swapper_map_bribe.json")
+        dump_dict_to_json(res, f"nonatomic/{dir}/builder_nonatomic_maps/builder_nonatomic_map_bribe.json")
         res = prune_known_entities_from_simple_map(res)
         agg = create_sorted_agg_from_map(res)
-        dump_dict_to_json(agg, "nonatomic/new/agg/agg_bribe.json")
+        dump_dict_to_json(agg, f"nonatomic/{dir}/agg/agg_bribe.json")
 
     return res, agg
     
@@ -414,7 +436,7 @@ def find_notable_searcher_builder_relationships(map, threshold):
             if percent > builder_usual_percent * (1 + tolerance) and percent > 10:
                 i += 1
                 highlight_relationship.add((searcher, builder))
-                print(searcher, builder, percent, builder_usual_percent)
+                # print(searcher, builder, percent, builder_usual_percent)
                 notable[searcher] = {builder: (count / total_count) * 100 for builder, count in builders.items()}
                 break
 
@@ -425,20 +447,26 @@ def find_notable_searcher_builder_relationships(map, threshold):
 
 
 if __name__ == "__main__":
-    # nonatomic_map = sort_map(load_dict_from_json("nonatomic/new/builder_swapper_maps/builder_swapper_map_vol.json"))
+    
+    atomic_gas_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json")
+    atomic_coin_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json")
+    # combine_gas_and_coin_bribes_in_eth(atomic_gas_map, atomic_coin_map, False, "fifty")
+
+
+    # nonatomic_map = sort_map(load_dict_from_json("nonatomic/new/builder_nonatomic_maps/builder_nonatomic_map_vol.json"))
     # nonatomic_agg = load_dict_from_json("nonatomic/new/agg/agg_vol.json")
     # nonatomic_map, nonatomic_agg = get_map_and_agg_in_range(nonatomic_map, nonatomic_agg, 0.95)
     # nonatomic_map, nonatomic_agg = analysis.remove_small_builders(nonatomic_map, nonatomic_agg, 1000)
     # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
     
     # nonatomic_fig.show()
-    blocks_agg = load_dict_from_json("atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json")
-    tally = 0
-    for builder, searchers in blocks_agg.items():
-        tally += searchers['total']
+    # blocks_agg = load_dict_from_json("atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json")
+    # tally = 0
+    # for builder, searchers in blocks_agg.items():
+    #     tally += searchers['total']
     
-    right_tally = 17818710-17595510
-    print(tally, right_tally)
+    # right_tally = 17955510-17595510
+    # print(tally, right_tally)
 
     # searcher_flow = {}
     # for builder, searchers in nonatomic_map.items():
