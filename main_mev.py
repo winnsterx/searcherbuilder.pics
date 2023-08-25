@@ -3,6 +3,7 @@ import requests
 import traceback
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import islice
 import analysis
 from collections import defaultdict
 import atomic_mev, nonatomic_mev
@@ -99,31 +100,20 @@ def default_block_dic():
     inner['total'] = 0
     return inner
 
-def analyze_blocks(fetched_blocks, fetched_internal_transfers):
+def analyze_blocks(fetched_blocks, fetched_internal_transfers,
+                   builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, 
+                   builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, 
+                   builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, 
+                   builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
+                   coinbase_bribe, after_bribe, tob_bribe):
     # returns all the MEV txs in that block (are there false negatives?)
     zeromev_url = "https://data.zeromev.org/v1/mevBlock"
-    builder_atomic_map_block = defaultdict(default_block_dic)
-    builder_atomic_map_tx = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
-    builder_atomic_map_profit = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
-    builder_atomic_map_vol = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
-    builder_atomic_map_coin_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
-    builder_atomic_map_gas_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
-    
-    builder_nonatomic_map_block = defaultdict(default_block_dic)
-    builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
-    builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
-    builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
-    builder_nonatomic_map_gas_bribe = defaultdict(lambda: defaultdict(int))
-
-    coinbase_bribe = {}
-    after_bribe = {}
-    tob_bribe = {}
 
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
         print("starting to go thru blocks")
-        with ThreadPoolExecutor(max_workers=32) as executor:
+        with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [executor.submit(analyze_block, session, zeromev_url, block_number, block, fetched_internal_transfers,
                                        builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe,
@@ -135,19 +125,117 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     
     return builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
 
+def chunks(data, SIZE=10000):
+    it = iter(data)
+    for i in range(0, len(data), SIZE):
+        yield {k:data[k] for k in islice(it, SIZE)}
+
+
+def to_nested_atomic_map(map):
+    dd_atomic_map = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
+    for builder, searchers in map.items():
+        for searcher, stats in searchers.items():
+            dd_atomic_map[builder][searcher] = stats
+    return dd_atomic_map
+
+def to_nested_nonatomic_map(map):
+    dd_nonatomic_map = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for searcher, count in searchers.items():
+            dd_nonatomic_map[builder][searcher] = count 
+    return dd_nonatomic_map
+
+def to_nested_block_map(map):
+    dd_block_map = defaultdict(default_block_dic)
+    for builder, searchers in map.items():
+        for searcher, count in searchers.items():
+            dd_block_map[builder][searcher] = count
+    return dd_block_map
+
+
+def dicts_to_append():
+    atomic_path_map = "atomic/thirty/builder_atomic_maps/"
+    atomic_path_map = "atomic/thirty/builder_atomic_maps/"    
+    builder_atomic_map_block = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_block.json")
+    builder_atomic_map_tx = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_tx.json")
+    builder_atomic_map_profit = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_profit.json")
+    builder_atomic_map_vol = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_vol.json")
+    builder_atomic_map_coin_bribe = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_coin_bribe.json")
+    builder_atomic_map_gas_bribe = analysis.load_dict_from_json(atomic_path_map + "builder_atomic_map_gas_bribe.json")
+    
+    nonatomic_path_map = "nonatomic/thirty/builder_nonatomic_maps/"
+    nonatomic_path_bribe_specs = "nonatomic/thirty/bribe_specs/"
+    builder_nonatomic_map_block = analysis.load_dict_from_json(nonatomic_path_map + "builder_nonatomic_map_block.json")
+    builder_nonatomic_map_tx = analysis.load_dict_from_json(nonatomic_path_map + "builder_nonatomic_map_tx.json")
+    builder_nonatomic_map_vol = analysis.load_dict_from_json(nonatomic_path_map + "builder_nonatomic_map_vol.json")
+    builder_nonatomic_map_coin_bribe = analysis.load_dict_from_json(nonatomic_path_map + "builder_nonatomic_map_coin_bribe.json")
+    builder_nonatomic_map_gas_bribe = analysis.load_dict_from_json(nonatomic_path_map + "builder_nonatomic_map_gas_bribe.json")
+
+    # Convert the regular dictionaries to nested defaultdicts
+    builder_atomic_map_block = to_nested_block_map(builder_atomic_map_block)
+    builder_atomic_map_tx = to_nested_atomic_map(builder_atomic_map_tx)
+    builder_atomic_map_profit = to_nested_atomic_map(builder_atomic_map_profit)
+    builder_atomic_map_vol = to_nested_atomic_map(builder_atomic_map_vol)
+    builder_atomic_map_coin_bribe = to_nested_atomic_map(builder_atomic_map_coin_bribe)
+    builder_atomic_map_gas_bribe = to_nested_atomic_map(builder_atomic_map_gas_bribe)
+
+    builder_nonatomic_map_block = to_nested_block_map(builder_nonatomic_map_block)
+    builder_nonatomic_map_tx = to_nested_nonatomic_map(builder_nonatomic_map_tx)
+    builder_nonatomic_map_vol = to_nested_nonatomic_map(builder_nonatomic_map_vol)
+    builder_nonatomic_map_coin_bribe = to_nested_nonatomic_map(builder_nonatomic_map_coin_bribe)
+    builder_nonatomic_map_gas_bribe = to_nested_nonatomic_map(builder_nonatomic_map_gas_bribe)
+
+
+    coinbase_bribe = analysis.load_dict_from_json(nonatomic_path_bribe_specs + "coinbase_bribe.json")
+    after_bribe = analysis.load_dict_from_json(nonatomic_path_bribe_specs + "after_bribe.json")
+    tob_bribe = analysis.load_dict_from_json(nonatomic_path_bribe_specs + "tob_bribe.json")
+
+    return builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
+
+
 
 if __name__ == "__main__":
-    start = time.time()
-    print(f"Starting to load block from json at {start / 1000}")
-    BLOCKS_PATH = "block_data/blocks_50_days.json"
+    STARTING_FRESH = False
+    start = time.time()    
+    print(f"Starting to load blocks at {start / 1000}")
+
+    if STARTING_FRESH: 
+        builder_atomic_map_block = defaultdict(default_block_dic)
+        builder_atomic_map_tx = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
+        builder_atomic_map_profit = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
+        builder_atomic_map_vol = defaultdict(lambda : defaultdict(atomic_mev.default_searcher_dic))
+        builder_atomic_map_coin_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
+        builder_atomic_map_gas_bribe = defaultdict(lambda: defaultdict(atomic_mev.default_searcher_dic))
+        
+        builder_nonatomic_map_block = defaultdict(default_block_dic)
+        builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
+        builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
+        builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
+        builder_nonatomic_map_gas_bribe = defaultdict(lambda: defaultdict(int))
+    
+        coinbase_bribe = {}
+        after_bribe = {}
+        tob_bribe = {}
+    else: 
+        builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = dicts_to_append()
+
+    BLOCKS_PATH = "block_data/aug_blocks.json"
     INTERNAL_TRANSFERS_PATH = "internal_transfers_data/internal_transfers_50_days.json"
 
     fetched_blocks = analysis.load_dict_from_json(BLOCKS_PATH)
     fetched_internal_transfers = analysis.load_dict_from_json(INTERNAL_TRANSFERS_PATH)
-
+    
     pre_analysis = time.time()
-    print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks for atomic.")
-    builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
+    print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing {len(fetched_blocks)} blocks for both atomic and nonatomic.")
+    for fetched_blocks_chunks in chunks(fetched_blocks, 100000):
+        print("processing chunks")
+        analyze_blocks(fetched_blocks_chunks, fetched_internal_transfers, 
+                    builder_atomic_map_block, builder_atomic_map_tx, builder_atomic_map_profit, 
+                    builder_atomic_map_vol, builder_atomic_map_coin_bribe, builder_atomic_map_gas_bribe, 
+                    builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, 
+                    builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
+                    coinbase_bribe, after_bribe, tob_bribe)
+        
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 

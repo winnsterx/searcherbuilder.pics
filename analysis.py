@@ -1,3 +1,4 @@
+
 import os, time, math
 import json
 import collections
@@ -5,6 +6,7 @@ import constants
 import analysis
 from collections import defaultdict, Counter
 from itertools import islice
+import functools
 import visual_analysis
 import fetch_blocks, chartprep, atomic_mev
 
@@ -14,7 +16,10 @@ def load_dict_from_json(filename):
         dict = json.load(file)
         return dict
     
-
+def load_nested_dict_from_json(filename, lamb):
+    with open(filename) as file:
+        dict = json.load(file, object_hook=functools.partial(defaultdict, lambda: lamb))
+        return dict
 
 
 
@@ -432,8 +437,8 @@ if __name__ == "__main__":
     for builder, searchers in blocks_agg.items():
         tally += searchers['total']
     
-    right_tally = len(load_dict_from_json("block_data/two_blocks.json"))
-    print(right_tally, tally)
+    right_tally = 17818710-17595510
+    print(tally, right_tally)
 
     # searcher_flow = {}
     # for builder, searchers in nonatomic_map.items():

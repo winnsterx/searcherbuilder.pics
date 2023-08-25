@@ -306,7 +306,7 @@ def create_searcher_builder_percentage_bar_chart(map, agg, builder_color_map, ti
     return fig
 
 
-def create_three_bar_charts_by_metric(all_maps_and_agg, metric, unit, builder_color_map):
+def create_three_bar_charts_by_metric(all_maps_and_agg, builder_color_map, metric, unit):
     atomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[0], all_maps_and_agg[1], builder_color_map, f"Atomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
     nonatomic_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[2], all_maps_and_agg[3], builder_color_map, f"Nonatomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
     combined_fig = create_searcher_builder_percentage_bar_chart(all_maps_and_agg[4], all_maps_and_agg[5], builder_color_map, f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})", metric)
@@ -422,6 +422,17 @@ def dump_data_used(all):
             analysis.dump_dict_to_json(agg, f"data/{type}/{mev_domain}_agg_{type}.json")
 
 
+def load_maps_and_aggs_from_dir(metric):
+    path = f"important_data/{metric}/"
+    atomic_map = analysis.load_dict_from_json(path + f"atomic_map_{metric}.json")
+    nonatomic_map = analysis.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
+    combined_map = analysis.load_dict_from_json(path + f"combined_map_{metric}.json")
+    atomic_agg = analysis.load_dict_from_json(path + f"atomic_agg_{metric}.json")
+    nonatomic_agg = analysis.load_dict_from_json(path + f"nonatomic_agg_{metric}.json")
+    combined_agg = analysis.load_dict_from_json(path + f"combined_agg_{metric}.json")
+
+    return [atomic_map, atomic_agg, nonatomic_map, nonatomic_agg, combined_map, combined_agg]
+
 
 if __name__ == "__main__":
     # all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("tx")
@@ -429,27 +440,24 @@ if __name__ == "__main__":
     # all_maps_and_aggs_bribe = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
     # dump_data_used([all_maps_and_aggs_tx, all_maps_and_aggs_vol, all_maps_and_aggs_bribe])
     
-    atomic_map_tx = analysis.load_dict_from_json("important_data/tx/atomic_map_tx.json")
-    nonatomic_map_tx = analysis.load_dict_from_json("important_data/tx/nonatomic_map_tx.json")
-    combined_map_tx = analysis.load_dict_from_json("important_data/tx/combined_map_tx.json")
 
-    atomic_agg_tx = analysis.load_dict_from_json("important_data/tx/atomic_agg_tx.json")
-    nonatomic_agg_tx = analysis.load_dict_from_json("important_data/tx/nonatomic_agg_tx.json")
-    combined_agg_tx = analysis.load_dict_from_json("important_data/tx/combined_agg_tx.json")
+    all_maps_and_aggs_tx = load_maps_and_aggs_from_dir("tx")
+    all_maps_and_aggs_vol = load_maps_and_aggs_from_dir("vol")
+    all_maps_and_aggs_bribe = load_maps_and_aggs_from_dir("bribe")
 
-    all_maps_and_aggs_tx = [atomic_map_tx, atomic_agg_tx, nonatomic_map_tx, nonatomic_agg_tx, combined_map_tx, combined_agg_tx]
-
-    all_builders = list(atomic_map_tx.keys()) + list(set(nonatomic_map_tx.keys()) - set(list(atomic_map_tx.keys())))
+    all_builders = list(all_maps_and_aggs_tx[0].keys()) + list(set(all_maps_and_aggs_tx[2].keys()) - set(list(all_maps_and_aggs_tx[0].keys())))
     builder_color_map = get_builder_colors_map(all_builders)
 
-    # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, "vol", "USD")
-    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, "tx", "Transaction Count", builder_color_map)
-    # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH")
-    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(atomic_map_tx, "transactions", "Atomic", builder_color_map)
+    atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol = create_three_bar_charts_by_metric(all_maps_and_aggs_vol, builder_color_map, "vol", "USD")
+    atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx = create_three_bar_charts_by_metric(all_maps_and_aggs_tx, builder_color_map, "tx", "Transaction Count")
+    atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe = create_three_bar_charts_by_metric(all_maps_and_aggs_bribe, builder_color_map,"bribe", "ETH")
+    
+    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(all_maps_and_aggs_tx[0], "transactions", "Atomic", builder_color_map)
     nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(analysis.load_dict_from_json("important_data/tx/nonatomic_map_tx.json"), "transactions", "Non-atomic", builder_color_map)
-    # atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, "vol", "USD", 0.95, 5000)
+    
+    atomic_fig_vol, nonatomic_fig_vol, combined_fig_vol = create_three_sankeys_by_metric(all_maps_and_aggs_vol, builder_color_map, "vol", "USD", 0.95, 5000)
     atomic_fig_tx, nonatomic_fig_tx, combined_fig_tx = create_three_sankeys_by_metric(all_maps_and_aggs_tx, builder_color_map, "tx", "number of transactions", 0.95, 5)
-    # atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, "bribe", "ETH", 0.95, 5)
+    atomic_fig_bribe, nonatomic_fig_bribe, combined_fig_bribe = create_three_sankeys_by_metric(all_maps_and_aggs_bribe, builder_color_map, "bribe", "ETH", 0.95, 5)
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx", "tx count")
     nonatomic_searcher_pie_tx = create_searcher_pie_chart(all_maps_and_aggs_tx[3], "Noatomic Searchers", "Market Shares", "tx", "tx count")
@@ -478,15 +486,15 @@ if __name__ == "__main__":
             ),
             combined_searcher_pie_tx,
             atomic_fig_tx,
-            # nonatomic_fig_vol,
-            # combined_fig_bribe
+            nonatomic_fig_vol,
+            combined_fig_bribe
         ]),
         dp.Page(title="Volume", blocks=[
             title, 
             head, 
-            # atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
-            # atomic_fig_vol,
-            # nonatomic_fig_vol, 
+            atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
+            atomic_fig_vol,
+            nonatomic_fig_vol, 
         ]),
         dp.Page(title="Transaction Count", blocks=[
             title, 
@@ -498,10 +506,10 @@ if __name__ == "__main__":
         dp.Page(title="Bribes", blocks=[
             title, 
             head, 
-            # atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
-            # atomic_fig_bribe,
-            # nonatomic_fig_bribe,
-            # combined_fig_bribe,
+            atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
+            atomic_fig_bribe,
+            nonatomic_fig_bribe,
+            combined_fig_bribe,
         ])
     )
     dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")

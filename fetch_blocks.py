@@ -226,6 +226,10 @@ if __name__ == "__main__":
     num_blocks = 360000 # 50 * 24 * 60 * 60 / 12
     end_block = 17955510 # Aug-20-2023 10:58:47 AM +UTC
 
+    blocks = get_blocks(start_block, 1)
+    blocks_2 = get_blocks(17595510+1, 1)
+    analysis.dump_dict_to_json(blocks, "block_data/start_block.json")
+    analysis.dump_dict_to_json(blocks_2, "block_data/next_block.json")
     # blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
     # all_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
     # analysis.dump_dict_to_json(all_internal_transfers,"internal_transfers_50_days.json")

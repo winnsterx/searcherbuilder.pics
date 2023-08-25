@@ -12,8 +12,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 import atomic_mev
 import analysis
 import constants
+import traceback
 import secret_keys
 import time
+import main_mev
 
 START_BLOCK = 17616021
 END_BLOCK = 17666420
@@ -138,37 +140,51 @@ def analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map
 
 # Given a block and its txs, get all the valid swap txs in that block, check that the swap txs 
 # EITHER contains an internal transfer to builder OR pays in top of block. 
-def analyze_block(block_number, block, fetched_internal_transfers, builder_nonatomic_map_tx, builder_nonatomic_map_vol, 
+def analyze_block(block_number, block, fetched_internal_transfers, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, 
                   builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe):
-    extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
-    # human-readable builder name, derived from extraData 
-    builder = atomic_mev.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
-    # hex-string of feeRecipient. can be builder or proposer
-    fee_recipient = block["feeRecipient"]
-    median_gas = calculate_block_median_gas_price(block["transactions"])
-    transfer_map = fetched_internal_transfers[block_number]
+    try:
+        total_txs = len(block["transactions"])
+        if total_txs < 1:
+            # empty block
+            return
+    
+        extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
+        # human-readable builder name, derived from extraData 
+        builder = atomic_mev.map_extra_data_to_builder(extra_data, block["feeRecipient"]) 
+        # hex-string of feeRecipient. can be builder or proposer
+        fee_recipient = block["feeRecipient"]
+        median_gas = calculate_block_median_gas_price(block["transactions"])
+        transfer_map = fetched_internal_transfers[block_number]
 
-    all_swaps = get_swaps(block_number)
+        all_swaps = get_swaps(block_number)
 
-    total_txs = len(block["transactions"])
-    top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
-    print(block_number, len(all_swaps))
+        top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
+        print(block_number, len(all_swaps))
 
+        builder_nonatomic_map_block[builder]['total'] += 1
+        addrs_counted_in_block = set()
 
-    # only consider txs labeled as swap by zeromev
-    for swap in all_swaps:
-        print("hi")
-        # if bribe via coinbase transfer
-#         def analyze_tx(builder, tx, full_tx, transfer_map, full_next_tx):
-        full_tx = block["transactions"][swap["tx_index"]]
-        full_next_tx = block.get("transactions", [])[swap['tx_index']+1] if 0 <= swap['tx_index']+1 < len(block.get("transactions", [])) else None
+        # only consider txs labeled as swap by zeromev
+        for swap in all_swaps:
+            # if bribe via coinbase transfer
+    #         def analyze_tx(builder, tx, full_tx, transfer_map, full_next_tx):
+            print(swap)
+            full_tx = block["transactions"][swap["tx_index"]]
+            if swap['tx_index'] == total_txs - 1: # tx is at the end of the block
+                full_next_tx = {}
+            else: 
+                full_next_tx = block["transactions"][swap['tx_index']+1]
 
-        analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas,
-                   builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, 
-                   builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
-        
+            analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas, 
+                       addrs_counted_in_block, builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol,
+                       builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
+    except Exception as e:
+        print("error found in one block", e, block_number)
+        print(traceback.format_exc())
+       
 
 def analyze_blocks(fetched_blocks, fetched_internal_transfers):
+    builder_nonatomic_map_block = defaultdict(main_mev.default_block_dic)
     builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
     builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
     builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
@@ -179,12 +195,13 @@ def analyze_blocks(fetched_blocks, fetched_internal_transfers):
     tob_bribe = {}
     with ThreadPoolExecutor(max_workers=64) as executor:
         # Use the executor to submit the tasks
-        futures = [executor.submit(analyze_block, block_number, block, fetched_internal_transfers, builder_nonatomic_map_tx, 
-                                   builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
+        futures = [executor.submit(analyze_block, block_number, block, fetched_internal_transfers, 
+                                   builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol,
+                                   builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, 
                                    coinbase_bribe, after_bribe, tob_bribe) for block_number, block in fetched_blocks.items()]
         for future in as_completed(futures):
             pass
-    return builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
+    return builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe
     
 
 # end result: 1) builder nonatomic map that shows builder: searcher where searchers have submitted more than 5 times
@@ -222,13 +239,13 @@ if __name__ == "__main__":
     # 17563790 to 17779790
     start = time.time()
     print(f"Starting to load block from json at {start / 1000}")
-    fetched_blocks = analysis.load_dict_from_json("block_data/blocks_3.json")
+    fetched_blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
     fetched_internal_transfers = analysis.load_dict_from_json("internal_transfers_data/internal_transfers_50_days.json")
 
     pre_analysis = time.time()
     print(f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks.")
-    builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
+    builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe = analyze_blocks(fetched_blocks, fetched_internal_transfers)
     post_analysis = time.time()
     print(f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data.")
 
-    compile_cefi_defi_data(builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
+    compile_cefi_defi_data(builder_nonatomic_map_block, builder_nonatomic_map_tx, builder_nonatomic_map_vol, builder_nonatomic_map_coin_bribe, builder_nonatomic_map_gas_bribe, coinbase_bribe, after_bribe, tob_bribe)
