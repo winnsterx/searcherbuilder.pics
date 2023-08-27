@@ -10,6 +10,7 @@ import constants
 from collections import defaultdict
 import seaborn as sns
 import colorcet as cc
+import secret_keys
 
 
 def abbreviate_label(label, short=False):
@@ -537,7 +538,7 @@ if __name__ == "__main__":
             combined_fig_bribe,
         ])
     )
-    dp.save_report(view, path="/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html")
+    dp.save_report(view, path=secret_keys.HTML_PATH+"/index.html")
 
     fixedposi = "<style>nav.min-h-screen {position: -webkit-sticky;position: sticky;}</style>"
 
@@ -599,9 +600,9 @@ if __name__ == "__main__":
         </style>
     '''
 
-    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "r") as file:
+    with open(secret_keys.HTML_PATH+"/index.html", "r") as file:
         f = file.read()
     OG_STUFF = ' <title>searcherbuilder.pics | Searcher Builder Dashboard</title>\n<meta charset="UTF-8" />\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:site" content="@winnsterx">\n<meta name="twitter:title" content="Searcher Builder Dashboard">\n<meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">\n<meta name="twitter:image" content="https://www.searcherbuilder.pics/">\n<meta property="og:title" content=Searcher Builder Dashboard>\n<meta property="og:site_name" content=searcherbuilder.pics>\n<meta property="og:url" content=searcherbuilder.pics>\n<meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum." >\n<meta property="og:type" content=website>\n<link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />\n<meta property="og:image" content=https://mevboost.toniwahrstaetter.com/pv.png>\n<meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">\n<meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">\n <meta name="author" content="Toni Wahrstätter">'
     f = f.replace('<meta charset="UTF-8" />\n', fixedposi+ OG_STUFF+more_css) # + GA
-    with open("/Users/winniex/Documents/GitHub/winnsterx.github.io/index.html", "w") as file:
+    with open(secret_keys.HTML_PATH+"/index.html", "w") as file:
         file.write(f)
