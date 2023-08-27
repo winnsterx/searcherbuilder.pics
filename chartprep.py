@@ -509,31 +509,31 @@ if __name__ == "__main__":
             ),
             combined_searcher_pie_tx,
             atomic_fig_tx,
-            nonatomic_fig_vol,
-            combined_fig_bribe
+            # nonatomic_fig_vol,
+            # combined_fig_bribe
         ]),
         dp.Page(title="Volume", blocks=[
             title, 
             head, 
             atomic_bar_vol, nonatomic_bar_vol, combined_bar_vol,
-            atomic_fig_vol,
+            # atomic_fig_vol,
             nonatomic_fig_vol, 
-            combined_fig_vol,
+            # combined_fig_vol,
         ]),
         dp.Page(title="Transaction Count", blocks=[
             title, 
             head, 
             atomic_bar_tx, nonatomic_bar_tx, combined_bar_tx,
             atomic_fig_tx,
-            nonatomic_fig_tx,
-            combined_fig_tx
+            # nonatomic_fig_tx,
+            # combined_fig_tx
         ]),
         dp.Page(title="Bribes", blocks=[
             title, 
             head, 
             atomic_bar_bribe, nonatomic_bar_bribe, combined_bar_bribe,
-            atomic_fig_bribe,
-            nonatomic_fig_bribe,
+            # atomic_fig_bribe,
+            # nonatomic_fig_bribe,
             combined_fig_bribe,
         ])
     )
