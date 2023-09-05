@@ -2,8 +2,8 @@ secret_keys.py
 all_blocks_30_days.json
 blocks_*.json
 block_data/
-atomic/thirty
-nonatomic/thirty
-nonatomic/fifty/bribe_specs/
+atomic/
+nonatomic/
 internal_transfers_data/
+receipts/
 important_data/
