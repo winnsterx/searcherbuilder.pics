@@ -1,4 +1,5 @@
 import os, time, math
+import pandas as pd
 import json
 import collections
 import constants
@@ -194,6 +195,12 @@ def get_agg_in_range(agg, threshold):
     return top_searchers
 
 
+def remove_atomic_from_map_and_agg(map, agg, atomic):
+    map = remove_atomic_from_map(map, atomic)
+    agg = remove_atomic_from_agg(agg, atomic)
+    return map, agg
+
+
 def remove_atomic_from_agg(agg, atomic):
     res = {}
     for addr, count in agg.items():
@@ -203,12 +210,12 @@ def remove_atomic_from_agg(agg, atomic):
 
 
 def remove_atomic_from_map(map, atomic):
-    nonatomic_map = defaultdict(lambda: defaultdict(int))
+    res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for searcher, count in searchers.items():
             if searcher not in atomic.keys():
-                nonatomic_map[builder][searcher] = count
-    return nonatomic_map
+                res[builder][searcher] = count
+    return res
 
 
 def prune(dir, is_atomic):
@@ -224,7 +231,7 @@ def prune(dir, is_atomic):
         dump_dict_to_json(res, dir + "/pruned/agg/" + os.path.basename(a))
 
 
-def aggregate_atomic_searchers(builder_atomic_map):
+def create_sorted_agg_from_atomic_map(builder_atomic_map):
     # {builder: {searcher: {"total": x, "arb": x, "frontrun": x, "backrun": x, "liquid": x}}}
     # aggregate means adding up the total for each searcher
     agg = defaultdict(int)
@@ -285,6 +292,18 @@ def prune_known_entities_from_atomic_map(map):
                 and addr not in constants.LABELED_CONTRACTS.values()
             ):
                 res[builder][addr] = stats["total"]
+    return res
+
+
+def prune_known_entities_from_searcher_builder_map(map):
+    res = defaultdict(lambda: defaultdict(int))
+    for searcher, builders in map.items():
+        if (
+            searcher not in constants.COMMON_CONTRACTS
+            and searcher not in constants.LABELED_CONTRACTS.values()
+        ):
+            res[searcher] = builders
+
     return res
 
 
@@ -408,7 +427,7 @@ def wei_to_eth(wei_val):
     return wei_val / wei_per_eth
 
 
-def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic, dir):
+def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
     wei_per_eth = 10**18
 
     if is_atomic:
@@ -430,12 +449,8 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic, dir):
                 res[builder][searcher]["liquid"] += stats["liquid"]
 
         res = sort_atomic_map_by_total(res)
-        dump_dict_to_json(
-            res, f"atomic/{dir}/builder_atomic_maps/builder_atomic_map_bribe.json"
-        )
-        res = prune_known_entities_from_atomic_map(res)
-        agg = create_sorted_agg_from_map(res)
-        dump_dict_to_json(agg, f"atomic/{dir}/agg/agg_bribe.json")
+        # res = prune_known_entities_from_atomic_map(res)
+        agg = create_sorted_agg_from_atomic_map(res)
     else:
         res = defaultdict(lambda: defaultdict(int))
         for builder, searchers in gas_map.items():
@@ -446,13 +461,8 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic, dir):
             for searcher, coin in searchers.items():
                 res[builder][searcher] += coin
         res = sort_map(res)
-        dump_dict_to_json(
-            res,
-            f"nonatomic/{dir}/builder_nonatomic_maps/builder_nonatomic_map_bribe.json",
-        )
-        res = prune_known_entities_from_simple_map(res)
+        # res = prune_known_entities_from_simple_map(res)
         agg = create_sorted_agg_from_map(res)
-        dump_dict_to_json(agg, f"nonatomic/{dir}/agg/agg_bribe.json")
 
     return res, agg
 
@@ -482,36 +492,64 @@ def humanize_number(value, fraction_point=1):
     return return_value
 
 
+# def get_builder_market_share_percentage(map):
+#     builder_market_share = {}
+
+#     for builder, searchers in map.items():
+#         builder_market_share[builder] = sum(searchers.values())
+#     total_count = sum(builder_market_share.values())
+#     for builder, count in builder_market_share.items():
+#         builder_market_share[builder] = count / total_count * 100
+
+#     return builder_market_share
+
+
 def get_builder_market_share_percentage(map):
     builder_market_share = {}
 
     for builder, searchers in map.items():
         builder_market_share[builder] = sum(searchers.values())
     total_count = sum(builder_market_share.values())
+
+    # calculate the percentages
     for builder, count in builder_market_share.items():
         builder_market_share[builder] = count / total_count * 100
+
+    # adjust the percentages to make sure they sum up to 100
+    adjustment = 100 - sum(builder_market_share.values())
+    builder_with_max_share = max(builder_market_share, key=builder_market_share.get)
+    builder_market_share[builder_with_max_share] += adjustment
 
     return builder_market_share
 
 
-def find_notable_searcher_builder_relationships(map, threshold):
-    tolerance = 1
+def get_big_builders(builder_market_share):
+    big_builders = set()
+    for builder, share in builder_market_share.items():
+        if share > 25:
+            big_builders.add(builder)
+    return big_builders
+
+
+def find_notable_searcher_builder_relationships(map):
+    """
+    Finds searchers who submitted either >2x to big 4 or >10 to other builders
+    Only looking at searchers that in the 99th percentile AND only return
+    at most top 20 searchers.
+    """
+
+    tolerance_big_builder = 2
+    tolerance_small_builder = 10
     notable = defaultdict(lambda: defaultdict(int))
     highlight_relationship = set()
-    # notable = set()
+
     searcher_builder_map = sort_map(create_searcher_builder_map(map))
 
-    # for searcher, builders in searcher_builder_map.items():
-    #     builder_percents = defaultdict(int)
-    #     total_count = sum(builders.values())
-    #     for builder, count in builders.items():
-    #         percent = count / total_count * 100
-    #         builder_percents[builder] = percent
-    #         if percent > threshold:
-    #             notable[searcher] = builder_percents
-    cutoff = 20
+    cutoff = 20  # only look at the top 20 interesting relationships
     i = 0
-    builder_market_share = get_builder_market_share_percentage(map)
+    builder_market_share = get_builder_market_share_percentage(map)  # by the metric
+    dump_dict_to_json(searcher_builder_map, "searcher_b_nap.json")
+
     for searcher, builders in searcher_builder_map.items():
         if i >= cutoff:
             break
@@ -519,10 +557,37 @@ def find_notable_searcher_builder_relationships(map, threshold):
         for builder, count in builders.items():
             percent = count / total_count * 100
             builder_usual_percent = builder_market_share[builder]
-            if percent > builder_usual_percent * (1 + tolerance) and percent > 10:
+
+            if builder_usual_percent > 50:
+                # for an ultra big builder, it would have to be towards 100% to be interesting
+                if percent > 95:
+                    i += 1
+                    highlight_relationship.add((searcher, builder))
+                    print(searcher, builder, percent, builder_usual_percent)
+                    notable[searcher] = {
+                        builder: (count / total_count) * 100
+                        for builder, count in builders.items()
+                    }
+                    break
+            elif builder_usual_percent > 25:
+                # for a big builder, 2x is sufficiently preferential
+                if percent > builder_usual_percent * tolerance_big_builder:
+                    i += 1
+                    highlight_relationship.add((searcher, builder))
+                    print(searcher, builder, percent, builder_usual_percent)
+                    notable[searcher] = {
+                        builder: (count / total_count) * 100
+                        for builder, count in builders.items()
+                    }
+                    break
+            elif (
+                percent > builder_usual_percent * tolerance_small_builder
+                and percent > 10
+            ):
+                # for a small builder, 10x is meaningful
                 i += 1
                 highlight_relationship.add((searcher, builder))
-                # print(searcher, builder, percent, builder_usual_percent)
+                print(searcher, builder, percent, builder_usual_percent)
                 notable[searcher] = {
                     builder: (count / total_count) * 100
                     for builder, count in builders.items()
@@ -560,8 +625,9 @@ def calculate_builder_profitability(blocks, receipts, internal_transfers):
             builder, block["feeRecipient"]
         )
 
-        if builder_is_fee_recipient == False:
-            continue
+        # if builder_is_fee_recipient == False:
+        #     print()
+        #     continue
 
         for tx in block["transactions"]:
             # only know gas used in receipt (after the tx has happened)
@@ -588,10 +654,7 @@ def calculate_builder_profitability(blocks, receipts, internal_transfers):
             total_priority_fees + total_coinbase_transfers - total_builder_rebates
         )
 
-        if builder_block_profit > 5 and "titan" in builder.lower():
-            print("in here", builder)
-            print(block_num, builder_block_profit)
-            print(total_priority_fees, total_coinbase_transfers, total_builder_rebates)
+        print(builder_block_profit)
 
         if builder_block_profit < 0:
             builder_subsidy_map[builder] += abs(builder_block_profit)
@@ -601,34 +664,67 @@ def calculate_builder_profitability(blocks, receipts, internal_transfers):
     return builder_profit_map, builder_subsidy_map
 
 
+def create_searcher_builder_average_vol_map(map_tx, map_vol):
+    # Initialize the result dictionary
+    searcher_builder_map_avg = {}
+
+    # Iterate through the builder_searcher_map_vol dictionary and compute the average volume per transaction
+    for builder, searchers in map_vol.items():
+        for searcher, volume in searchers.items():
+            tx_count = map_tx[builder][searcher]
+            avg_vol_per_tx = volume / tx_count
+            searcher_builder_map_avg.setdefault(searcher, {})[builder] = avg_vol_per_tx
+
+    return searcher_builder_map_avg
+
+
 if __name__ == "__main__":
     start = 17969910
     num_blocks = 50400
     end = 18020309
 
-    blocks = load_dict_from_json("block_data/aug_second_half.json")
-    internal_transfers = load_dict_from_json(
-        "internal_transfers_data/internal_transfers_50_days.json"
+    map_tx = load_dict_from_json(
+        "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_tx.json"
     )
-    receipts = load_dict_from_json("receipts/receipts_50_days.json")
-
-    seven_day_blocks = {
-        block_number: block
-        for block_number, block in blocks.items()
-        if int(block_number) > start and int(block_number) <= end
-    }
-    seven_day_receipts = {
-        block_number: receipt
-        for block_number, receipt in receipts.items()
-        if int(block_number) > start and int(block_number) <= end
-    }
-
-    builder_profit_map, builder_subsidy_map = calculate_builder_profitability(
-        seven_day_blocks, seven_day_receipts, internal_transfers
+    map_vol = load_dict_from_json(
+        "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_vol.json"
     )
 
-    dump_dict_to_json(sort_agg(builder_profit_map), "builder_profit_map.json")
-    dump_dict_to_json(sort_agg(builder_subsidy_map), "builder_subsidy_map.json")
+    dump_dict_to_json(
+        create_searcher_builder_average_vol_map(map_tx, map_vol),
+        "searcher_builder_avg.json",
+    )
+
+    # beaconchain = load_dict_from_json("response_1693950298679.json")
+    # block_numbers = [item["blockNumber"] for item in beaconchain["data"]]
+
+    # blocks = fetch_blocks.get_blocks_by_list(block_numbers)
+    # internal_transfers = (
+    #     fetch_blocks.get_internal_transfers_to_fee_recipients_in_blocks(blocks)
+    # )
+    # receipts = fetch_blocks.get_blocks_receipts_by_list(block_numbers)
+
+    # blocks = load_dict_from_json("block_18071077.json")
+    # internal_transfers = load_dict_from_json("internal_transfers_18071077.json")
+    # receipts = load_dict_from_json("receipt_18071077.json")
+
+    # seven_day_blocks = {
+    #     block_number: block
+    #     for block_number, block in blocks.items()
+    #     if int(block_number) > start and int(block_number) <= end
+    # }
+    # seven_day_receipts = {
+    #     block_number: receipt
+    #     for block_number, receipt in receipts.items()
+    #     if int(block_number) > start and int(block_number) <= end
+    # }
+
+    # builder_profit_map, builder_subsidy_map = calculate_builder_profitability(
+    #     blocks, receipts, internal_transfers
+    # )
+
+    # dump_dict_to_json(sort_agg(builder_profit_map), "builder_profit_map.json")
+    # dump_dict_to_json(sort_agg(builder_subsidy_map), "builder_subsidy_map.json")
 
     # atomic_gas_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json")
     # atomic_coin_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json")

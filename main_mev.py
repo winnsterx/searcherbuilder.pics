@@ -7,6 +7,8 @@ from itertools import islice
 import analysis
 from collections import defaultdict
 import atomic_mev, nonatomic_mev
+import fetch_blocks
+import secret_keys
 
 
 def map_extra_data_to_builder(extra_data, feeRecipient):
@@ -206,7 +208,7 @@ def analyze_blocks(
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
-        print("starting to go thru blocks")
+        print("Zero-ing into blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [
@@ -236,7 +238,7 @@ def analyze_blocks(
             ]
             for future in as_completed(futures):
                 pass
-        print("finished counting in", time.time() - start, " seconds")
+        print("Finished zeroing in", time.time() - start, " seconds")
 
     return (
         builder_atomic_map_block,
@@ -372,8 +374,8 @@ def dicts_to_append():
     )
 
 
-if __name__ == "__main__":
-    STARTING_FRESH = False
+def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
+    STARTING_FRESH = True
     start = time.time()
     print(f"Starting to load blocks at {start / 1000}")
 
@@ -422,18 +424,11 @@ if __name__ == "__main__":
             tob_bribe,
         ) = dicts_to_append()
 
-    BLOCKS_PATH = "block_data/aug_blocks.json"
-    INTERNAL_TRANSFERS_PATH = "internal_transfers_data/internal_transfers_50_days.json"
-
-    fetched_blocks = analysis.load_dict_from_json(BLOCKS_PATH)
-    fetched_internal_transfers = analysis.load_dict_from_json(INTERNAL_TRANSFERS_PATH)
-
     pre_analysis = time.time()
     print(
         f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing {len(fetched_blocks)} blocks for both atomic and nonatomic."
     )
     for fetched_blocks_chunks in chunks(fetched_blocks, 100000):
-        print("processing chunks")
         analyze_blocks(
             fetched_blocks_chunks,
             fetched_internal_transfers,

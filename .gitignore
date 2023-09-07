@@ -7,3 +7,5 @@ nonatomic/
 internal_transfers_data/
 receipts/
 important_data/
+data/
+gbq_service_account.json

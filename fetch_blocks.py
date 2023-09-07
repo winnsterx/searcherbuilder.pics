@@ -71,7 +71,7 @@ def batch_request(batch, retries, blocks_fetched):
     while retries < MAX_RETRIES:
         try:
             start = time.time()
-            print(f"Getting batch at {start}, attempt {retries + 1}")
+            print(f"Fetching batch at {start}, attempt {retries + 1}")
             response = requests.post(
                 secret_keys.ALCHEMY, headers=headers, data=json.dumps(batch)
             )
@@ -105,13 +105,44 @@ def batch_request(batch, retries, blocks_fetched):
 
 
 # Get all blocks in batch requests of 1000
+def get_blocks_by_list(block_nums):
+    batch_size = 1000
+    blocks_fetched = {}
+
+    start = time.time()
+    print("Fetching blocks at", start)
+
+    # with ThreadPoolExecutor(max_workers=3) as executor:
+    #     # Use the executor to submit the tasks
+    #     futures = [executor.submit(batch_request, first_block_of_batch, end_block, batch_size, 0, blocks_fetched) for first_block_of_batch in range(start_block, end_block + 1, batch_size)]
+    #     for future in as_completed(futures):
+    #         pass
+
+    batch = []
+    for block in block_nums:
+        batch.append(
+            {
+                "jsonrpc": "2.0",
+                "id": block,
+                "method": "eth_getBlockByNumber",
+                "params": [hex(block), True],
+            }
+        )
+
+    batch_request(batch, 0, blocks_fetched)
+
+    print("Finished fetching blocks in", time.time() - start, " seconds")
+    return blocks_fetched
+
+
+# Get all blocks in batch requests of 1000
 def get_blocks(start_block, num_blocks):
     batch_size = 1000
     end_block = start_block + num_blocks - 1
     blocks_fetched = {}
 
     start = time.time()
-    print("starting to get blocks at ", start)
+    print("Fetching blocks at", start)
 
     # with ThreadPoolExecutor(max_workers=3) as executor:
     #     # Use the executor to submit the tasks
@@ -131,7 +162,7 @@ def get_blocks(start_block, num_blocks):
         ]
         batch_request(batch, 0, blocks_fetched)
 
-    print("finished getting blocks in", time.time() - start, " seconds")
+    print("Finished fetching blocks in", time.time() - start, "seconds")
     return blocks_fetched
 
 
@@ -220,7 +251,6 @@ def get_internal_transfers_to_fee_recipient_in_block(
             ],
         }
         response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
-        print(block_number, response.status_code)
         transfers = response.json()["result"]["transfers"]
         transfer_map = {
             tr["hash"]: {"from": tr["from"], "to": tr["to"], "value": tr["value"]}
@@ -288,13 +318,32 @@ def get_block_receipts(session, block_num, all_receipts):
     all_receipts[block_num] = response
 
 
+def get_blocks_receipts_by_list(blocks_nums):
+    all_receipts = defaultdict(lambda: defaultdict)
+    with requests.Session() as session:
+        # Create a ThreadPoolExecutor
+        start = time.time()
+        print("Fetch receipts for blocks")
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            # Use the executor to submit the tasks
+            futures = [
+                executor.submit(get_block_receipts, session, block_number, all_receipts)
+                for block_number in blocks_nums
+            ]
+            for future in as_completed(futures):
+                pass
+        print("Finished fetching receipts in", time.time() - start, " seconds")
+
+    return all_receipts
+
+
 def get_blocks_receipts(start_block, num_blocks):
     end_block = start_block + num_blocks
     all_receipts = defaultdict(lambda: defaultdict)
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
-        print("starting to get receipts for blocks")
+        print("Fetch receipts for blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [
@@ -303,9 +352,26 @@ def get_blocks_receipts(start_block, num_blocks):
             ]
             for future in as_completed(futures):
                 pass
-        print("finished getting receipts in", time.time() - start, " seconds")
+        print("Finished fetching receipts in", time.time() - start, " seconds")
 
     return all_receipts
+
+
+def block_number_14_days_ago():
+    # Current block number
+    payload = {"id": 1, "jsonrpc": "2.0", "method": "eth_blockNumber"}
+    headers = {"accept": "application/json", "content-type": "application/json"}
+    current_block_number = int(
+        requests.post(secret_keys.ALCHEMY, json=payload, headers=headers).json()[
+            "result"
+        ],
+        16,
+    )
+
+    # Ethereum block time is roughly 15 seconds
+    # 14 days = 14 * 24 * 60 * 60 seconds
+    blocks_in_14_days = (14 * 24 * 60 * 60) / 12
+    return current_block_number - int(blocks_in_14_days)
 
 
 if __name__ == "__main__":
@@ -326,10 +392,14 @@ if __name__ == "__main__":
     num_blocks = 50400
     end = 18020309
 
-    # blocks = get_blocks(17985449, 1)
-    receipts = get_blocks_receipts(start, num_blocks)
+    blocks = get_blocks(18071077, 1)
+    receipts = get_blocks_receipts(18071077, 1)
+    internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
     # blocks = dict(sorted(blocks.items()))
-    analysis.dump_dict_to_json(receipts, "receipts/one_receipt.json")
+    analysis.dump_dict_to_json(blocks, "block_18071077.json")
+    analysis.dump_dict_to_json(receipts, "receipt_18071077.json")
+    analysis.dump_dict_to_json(internal_transfers, "internal_transfers_18071077.json")
+
     # blocks = analysis.load_dict_from_json("block_data/aug_second_half.json")
     # count_blocks(blocks, start_block)
 
