@@ -6,6 +6,7 @@ import constants
 import analysis
 from collections import defaultdict, Counter
 from itertools import islice
+import statistics
 import requests
 import secret_keys
 import functools
@@ -213,7 +214,7 @@ def remove_atomic_from_map(map, atomic):
     res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for searcher, count in searchers.items():
-            if searcher not in atomic.keys():
+            if searcher not in atomic:
                 res[builder][searcher] = count
     return res
 
@@ -558,12 +559,12 @@ def find_notable_searcher_builder_relationships(map):
             percent = count / total_count * 100
             builder_usual_percent = builder_market_share[builder]
 
-            if builder_usual_percent > 50:
+            if builder_usual_percent > 40:
                 # for an ultra big builder, it would have to be towards 100% to be interesting
-                if percent > 95:
+                if percent > 80:
                     i += 1
                     highlight_relationship.add((searcher, builder))
-                    print(searcher, builder, percent, builder_usual_percent)
+                    # print(searcher, builder, percent, builder_usual_percent)
                     notable[searcher] = {
                         builder: (count / total_count) * 100
                         for builder, count in builders.items()
@@ -574,7 +575,17 @@ def find_notable_searcher_builder_relationships(map):
                 if percent > builder_usual_percent * tolerance_big_builder:
                     i += 1
                     highlight_relationship.add((searcher, builder))
-                    print(searcher, builder, percent, builder_usual_percent)
+                    # print(searcher, builder, percent, builder_usual_percent)
+                    notable[searcher] = {
+                        builder: (count / total_count) * 100
+                        for builder, count in builders.items()
+                    }
+                    break
+            elif builder_usual_percent > 3:
+                if percent > builder_usual_percent * 3:
+                    i += 1
+                    highlight_relationship.add((searcher, builder))
+                    # print(searcher, builder, percent, builder_usual_percent)
                     notable[searcher] = {
                         builder: (count / total_count) * 100
                         for builder, count in builders.items()
@@ -587,7 +598,7 @@ def find_notable_searcher_builder_relationships(map):
                 # for a small builder, 10x is meaningful
                 i += 1
                 highlight_relationship.add((searcher, builder))
-                print(searcher, builder, percent, builder_usual_percent)
+                # print(searcher, builder, percent, builder_usual_percent)
                 notable[searcher] = {
                     builder: (count / total_count) * 100
                     for builder, count in builders.items()
@@ -676,6 +687,26 @@ def create_searcher_builder_average_vol_map(map_tx, map_vol):
             searcher_builder_map_avg.setdefault(searcher, {})[builder] = avg_vol_per_tx
 
     return searcher_builder_map_avg
+
+
+def create_searcher_builder_median_vol_map(map_vol_list):
+    searcher_builder_map_med = {}
+    for builder, searchers in map_vol_list.items():
+        for searcher, vols in searchers.items():
+            searcher_builder_map_med.setdefault(searcher, {})[
+                builder
+            ] = statistics.median(vols)
+
+    return searcher_builder_map_med
+
+
+def create_searcher_builder_vol_list_map(map_vol_list):
+    searcher_builder_map = {}
+    for builder, searchers in map_vol_list.items():
+        for searcher, vols in searchers.items():
+            searcher_builder_map.setdefault(searcher, {})[builder] = vols
+
+    return searcher_builder_map
 
 
 if __name__ == "__main__":

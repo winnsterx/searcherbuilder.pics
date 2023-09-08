@@ -1,4 +1,5 @@
 import datapane as dp
+import statistics
 import random
 import plotly.graph_objects as go
 import plotly.express as px
@@ -178,7 +179,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
     #     builder_market_share[builder] = 100 / builder_num
 
     span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable Relationships between {} Searchers & Builders<br /><span style="font-size: 13px;">(Highlighting relationships where a searcher\'s orderflow is sent<br /> to a builder at an usually high rate, by {})</span></span>'
-    print("notable items", notable)
+
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
         x_highlighted = []
@@ -402,6 +403,23 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
     return fig
 
 
+def return_map_pruned_of_known_entities_and_atomc(metric):
+    atomic_map = analysis.load_dict_from_json(
+        f"atomic/fourteen/builder_atomic_maps/builder_atomic_map_{metric}.json"
+    )
+    nonatomic_map = analysis.load_dict_from_json(
+        f"nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_{metric}.json"
+    )
+    atomic_map = analysis.prune_known_entities_from_simple_map(atomic_map)
+    atomic_searchers = list(
+        set(searcher for builder in atomic_map.values() for searcher in builder.keys())
+    )
+    nonatomic_map = analysis.prune_known_entities_from_simple_map(nonatomic_map)
+    nonatomic_map = analysis.remove_atomic_from_map(nonatomic_map, atomic_searchers)
+
+    return [atomic_map, {}, nonatomic_map, {}]
+
+
 def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     """
     Returns atomic, nonatomic, and combined maps and aggs that are
@@ -509,7 +527,7 @@ def return_sorted_block_map_and_agg_pruned(metric="block"):
 
 
 def dump_data_used(all):
-    # [block, tx, vol, bribe]
+    # [block, tx, vol, bribe, vol_list]
     for i in range(0, len(all)):
         if i == 0:
             type = "block"
@@ -519,6 +537,8 @@ def dump_data_used(all):
             type = "vol"
         elif i == 3:
             type = "bribe"
+        elif i == 4:
+            type = "vol_list"
         all_maps_and_aggs = all[i]
 
         # [atomic_map, atomic_agg, nonatomic_map, nonatomic_agg, combined_map, combined_agg]
@@ -583,6 +603,11 @@ def create_searcher_builder_avg_vol_heatmap(map_tx, map_vol):
     searcher_builder_avg_vol_map = analysis.create_searcher_builder_average_vol_map(
         map_tx, map_vol
     )
+    for searcher, builders in searcher_builder_avg_vol_map.items():
+        avg = sum(builders.values()) / len(builders)
+        searcher_builder_avg_vol_map[searcher] = {
+            b: v / avg for b, v in builders.items()
+        }
     df = pd.DataFrame(searcher_builder_avg_vol_map).T
 
     # Replace NaN values with 0
@@ -607,6 +632,116 @@ def create_searcher_builder_avg_vol_heatmap(map_tx, map_vol):
     return fig
 
 
+def normalize_val(max, min, v):
+    if max == min and max == v and min == v:
+        return 1
+    else:
+        return (v - min) / (max - min)
+
+
+def compute_z_score(median, mean, std):
+    if median == 0:
+        return 0
+    else:
+        z_score = abs(median - mean) / std
+        return z_score
+
+
+def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
+    all_builders = list(map_vol_list.keys())
+
+    searcher_builder_median_vol_map = analysis.create_searcher_builder_median_vol_map(
+        map_vol_list
+    )
+    searcher_builder_vol_list_map = analysis.create_searcher_builder_vol_list_map(
+        map_vol_list
+    )
+    analysis.dump_dict_to_json(
+        searcher_builder_vol_list_map, "searcher_builder_vol_list_map.json"
+    )
+    analysis.dump_dict_to_json(
+        searcher_builder_median_vol_map, "searcher_builder_median_vol_map.json"
+    )
+
+    pruned_map = {}
+    for searcher, _ in agg_vol.items():
+        # for searcher, builders in searcher_builder_median_vol_map.items():
+        builders_vol_list = searcher_builder_vol_list_map.get(searcher, {})
+        builders_median_partial = searcher_builder_median_vol_map.get(
+            searcher, {}
+        )  # {builder: x, builder: x}
+        builders_median = {}
+        for builder in all_builders:
+            builders_median[builder] = builders_median_partial.get(builder, 0)
+
+        # all_values = [
+        #     item for sublist in builders_vol_list.values() for item in sublist
+        # ]
+
+        if len(builders_median) < 2:
+            continue
+            # if the searcher has only ever sent txs, not enough data point, we ignore
+        avg = statistics.mean(builders_median.values())
+        std = statistics.stdev(builders_median.values())
+        print("for searcher", searcher, avg, std)
+        print("builder medians", builders_median)
+        # max_val = max(all_values, default=None)
+        # min_val = min(all_values, default=None)
+        # max_val = max(builders_median.values())
+        # min_val = min(builders_median.values())
+        # med_val = statistics.median(builders_median.values())
+        # builders_abs_diff = {
+        #     builder: abs(median - med_val)
+        #     for builder, median in builders_median.items()
+        # }
+        # max_val = max(builders_abs_diff.values())
+        # min_val = min(builders_abs_diff.values())
+        # print("creating grid for", searcher, med_val)
+        constant = abs(0 - avg) / std
+        print(constant)
+        for builder in all_builders:
+            med_val = builders_median.get(builder, 0)
+            z_score = compute_z_score(med_val, avg, std)
+            # norm_val = normalize_val(max_val, min_val, diff_from_median)
+            print(builder, z_score)
+            pruned_map.setdefault(searcher, {})[builder] = z_score
+
+    analysis.dump_dict_to_json(pruned_map, "median_vol_map.json")
+
+    df = pd.DataFrame(pruned_map).T
+    df = df.fillna(0)
+    # Create heatmap
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=df.iloc[::-1],
+            x=df.columns,
+            y=[abbreviate_label(s, True) for s in df.index[::-1]],
+            colorscale="reds",
+        )
+    )
+    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">Median Transaction Volume between Searcher & Builder<br /><span style="font-size: 14px;font-weight:normal">(Intensity represented by the median transaction volume between <br /> searcher-builder pair, standardized using Z-score)</span></span>'
+
+    title_layout = {
+        "text": span,
+        "y": 0.95,
+        "x": 0.5,
+        "xanchor": "center",
+        "yanchor": "top",
+    }
+
+    fig.update_layout(
+        title=title_layout,
+        xaxis_title="",
+        yaxis_title="",
+        margin={"t": 150},  # what gives the spacing between title and plot
+        font=dict(family="Courier New, monospace", color="black"),
+        autosize=False,
+        height=1500,
+    )
+
+    return fig
+
+
 def create_html_page():
     all_builders_keys = list(
         analysis.load_dict_from_json(
@@ -616,14 +751,17 @@ def create_html_page():
     builder_color_map = get_builder_colors_map(all_builders_keys)
 
     # all_maps_and_aggs_block = return_sorted_block_map_and_agg_pruned()
+    # all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(
+    #     "tx"
+    # )
     # all_maps_and_aggs_vol = (
     #     return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
     # )
     # all_maps_and_aggs_bribe = (
     #     return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
     # )
-    # all_maps_and_aggs_tx = return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(
-    #     "tx"
+    # all_maps_and_aggs_vol_list = return_map_pruned_of_known_entities_and_atomc(
+    #     "vol_list"
     # )
 
     # dump_data_used(
@@ -632,12 +770,14 @@ def create_html_page():
     #         all_maps_and_aggs_tx,
     #         all_maps_and_aggs_vol,
     #         all_maps_and_aggs_bribe,
+    #         all_maps_and_aggs_vol_list,
     #     ]
     # )
 
     all_maps_and_aggs_tx = load_maps_and_aggs_from_dir("tx")
     all_maps_and_aggs_vol = load_maps_and_aggs_from_dir("vol")
     all_maps_and_aggs_bribe = load_maps_and_aggs_from_dir("bribe")
+    all_maps_and_aggs_vol_list = load_maps_and_aggs_from_dir("vol_list")
 
     nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_vol[2], "vol", "Non-atomic", builder_color_map
@@ -663,8 +803,8 @@ def create_html_page():
         "tx",
     )
 
-    nonatomic_heatmap = create_searcher_builder_avg_vol_heatmap(
-        all_maps_and_aggs_tx[2], all_maps_and_aggs_vol[2]
+    nonatomic_heatmap = create_searcher_builder_median_vol_heatmap(
+        all_maps_and_aggs_vol_list[2], all_maps_and_aggs_vol[3]
     )
 
     # combined_bribe_bar = create_searcher_builder_percentage_bar_chart(

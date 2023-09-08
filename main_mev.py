@@ -36,17 +36,21 @@ def analyze_tx(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
     builder_nonatomic_map_block,
     builder_nonatomic_map_tx,
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
 ):
     mev_type = tx["mev_type"]
-    if mev_type == "swap" or mev_type == "sandwich":
+    if mev_type == "sandwich":
+        return
+    elif mev_type == "swap":
         nonatomic_mev.analyze_tx(
             builder,
             fee_recipient,
@@ -62,6 +66,7 @@ def analyze_tx(
             builder_nonatomic_map_vol,
             builder_nonatomic_map_coin_bribe,
             builder_nonatomic_map_gas_bribe,
+            builder_nonatomic_map_vol_list,
             coinbase_bribe,
             after_bribe,
             tob_bribe,
@@ -79,6 +84,7 @@ def analyze_tx(
             builder_atomic_map_vol,
             builder_atomic_map_coin_bribe,
             builder_atomic_map_gas_bribe,
+            builder_atomic_map_vol_list,
         )
 
 
@@ -95,11 +101,13 @@ def analyze_block(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
     builder_nonatomic_map_block,
     builder_nonatomic_map_tx,
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
@@ -159,11 +167,13 @@ def analyze_block(
                     builder_atomic_map_vol,
                     builder_atomic_map_coin_bribe,
                     builder_atomic_map_gas_bribe,
+                    builder_atomic_map_vol_list,
                     builder_nonatomic_map_block,
                     builder_nonatomic_map_tx,
                     builder_nonatomic_map_vol,
                     builder_nonatomic_map_coin_bribe,
                     builder_nonatomic_map_gas_bribe,
+                    builder_nonatomic_map_vol_list,
                     coinbase_bribe,
                     after_bribe,
                     tob_bribe,
@@ -193,11 +203,13 @@ def analyze_blocks(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
     builder_nonatomic_map_block,
     builder_nonatomic_map_tx,
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
@@ -225,11 +237,13 @@ def analyze_blocks(
                     builder_atomic_map_vol,
                     builder_atomic_map_coin_bribe,
                     builder_atomic_map_gas_bribe,
+                    builder_atomic_map_vol_list,
                     builder_nonatomic_map_block,
                     builder_nonatomic_map_tx,
                     builder_nonatomic_map_vol,
                     builder_nonatomic_map_coin_bribe,
                     builder_nonatomic_map_gas_bribe,
+                    builder_nonatomic_map_vol_list,
                     coinbase_bribe,
                     after_bribe,
                     tob_bribe,
@@ -247,11 +261,13 @@ def analyze_blocks(
         builder_atomic_map_vol,
         builder_atomic_map_coin_bribe,
         builder_atomic_map_gas_bribe,
+        builder_atomic_map_vol_list,
         builder_nonatomic_map_block,
         builder_nonatomic_map_tx,
         builder_nonatomic_map_vol,
         builder_nonatomic_map_coin_bribe,
         builder_nonatomic_map_gas_bribe,
+        builder_nonatomic_map_vol_list,
         coinbase_bribe,
         after_bribe,
         tob_bribe,
@@ -396,12 +412,14 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         builder_atomic_map_gas_bribe = defaultdict(
             lambda: defaultdict(atomic_mev.default_searcher_dic)
         )
+        builder_atomic_map_vol_list = defaultdict(lambda: defaultdict(list))
 
         builder_nonatomic_map_block = defaultdict(default_block_dic)
         builder_nonatomic_map_tx = defaultdict(lambda: defaultdict(int))
         builder_nonatomic_map_vol = defaultdict(lambda: defaultdict(int))
         builder_nonatomic_map_coin_bribe = defaultdict(lambda: defaultdict(int))
         builder_nonatomic_map_gas_bribe = defaultdict(lambda: defaultdict(int))
+        builder_nonatomic_map_vol_list = defaultdict(lambda: defaultdict(list))
 
         coinbase_bribe = {}
         after_bribe = {}
@@ -438,11 +456,13 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
             builder_atomic_map_vol,
             builder_atomic_map_coin_bribe,
             builder_atomic_map_gas_bribe,
+            builder_atomic_map_vol_list,
             builder_nonatomic_map_block,
             builder_nonatomic_map_tx,
             builder_nonatomic_map_vol,
             builder_nonatomic_map_coin_bribe,
             builder_nonatomic_map_gas_bribe,
+            builder_nonatomic_map_vol_list,
             coinbase_bribe,
             after_bribe,
             tob_bribe,
@@ -460,6 +480,7 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         builder_atomic_map_vol,
         builder_atomic_map_coin_bribe,
         builder_atomic_map_gas_bribe,
+        builder_atomic_map_vol_list,
     )
     nonatomic_mev.compile_cefi_defi_data(
         builder_nonatomic_map_block,
@@ -467,6 +488,7 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         builder_nonatomic_map_vol,
         builder_nonatomic_map_coin_bribe,
         builder_nonatomic_map_gas_bribe,
+        builder_nonatomic_map_vol_list,
         coinbase_bribe,
         after_bribe,
         tob_bribe,

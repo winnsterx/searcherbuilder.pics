@@ -24,6 +24,7 @@ def analyze_tx(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
 ):
     mev_type = tx["mev_type"]
     if mev_type == "sandwich" or mev_type == "swap":
@@ -56,7 +57,7 @@ def analyze_tx(
         builder_atomic_map_tx[builder][addr_to][mev_type] += 1
         builder_atomic_map_profit[builder][addr_to][mev_type] += profit
         builder_atomic_map_vol[builder][addr_to][mev_type] += volume
-
+        builder_atomic_map_vol_list[builder][addr_to].append(volume)
         builder_atomic_map_tx[builder][addr_to]["total"] += 1
         builder_atomic_map_profit[builder][addr_to]["total"] += profit
         builder_atomic_map_vol[builder][addr_to]["total"] += volume
@@ -71,6 +72,8 @@ def analyze_tx(
         # revenut (not profit) will be zero for one of the legs. if even, then in front
         builder_atomic_map_profit[builder][addr_to][mev_type] += profit
         builder_atomic_map_vol[builder][addr_to][mev_type] += volume
+        builder_atomic_map_vol_list[builder][addr_to].append(volume)
+
         # only count volume from frontrun in the total (can count it separate for later purpose)
         builder_atomic_map_tx[builder][addr_to]["total"] += 1
         builder_atomic_map_profit[builder][addr_to]["total"] += profit
@@ -83,6 +86,7 @@ def analyze_tx(
         # addr_from here, bc liquidation doesnt use special contracts but EOA
         builder_atomic_map_tx[builder][addr_from][mev_type] += 1
         builder_atomic_map_vol[builder][addr_from][mev_type] += volume
+        builder_atomic_map_vol_list[builder][addr_from].append(volume)
 
         builder_atomic_map_tx[builder][addr_from]["total"] += 1
         builder_atomic_map_profit[builder][addr_from]["total"] += profit
@@ -116,6 +120,7 @@ def analyze_block(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
 ):
     try:
         extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
@@ -220,6 +225,7 @@ def compile_atomic_data(
     builder_atomic_map_vol,
     builder_atomic_map_coin_bribe,
     builder_atomic_map_gas_bribe,
+    builder_atomic_map_vol_list,
 ):
     analysis.dump_dict_to_json(
         builder_atomic_map_block,
@@ -244,6 +250,10 @@ def compile_atomic_data(
     analysis.dump_dict_to_json(
         builder_atomic_map_gas_bribe,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_gas_bribe.json",
+    )
+    analysis.dump_dict_to_json(
+        builder_atomic_map_vol_list,
+        "atomic/fourteen/builder_atomic_maps/builder_atomic_map_vol_list.json",
     )
 
     agg_block = analysis.aggregate_block_count(builder_atomic_map_block)

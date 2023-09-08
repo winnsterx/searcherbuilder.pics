@@ -41,7 +41,9 @@ def get_swaps(block_number):
     if res.status_code == 200:
         data = res.json()
         for tx in data:
-            if tx["mev_type"] == "swap" or tx["mev_type"] == "sandwich":
+            if tx["mev_type"] == "sandwich":
+                continue
+            elif tx["mev_type"] == "swap":
                 swaps.append(tx)
         return swaps
     else:
@@ -88,6 +90,7 @@ def analyze_tx(
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
@@ -102,6 +105,9 @@ def analyze_tx(
         builder_nonatomic_map_vol[builder][
             transfer_map[full_tx["hash"]]["from"]
         ] += tx_volume
+        builder_nonatomic_map_vol_list[builder][
+            transfer_map[full_tx["hash"]]["from"]
+        ].append(tx_volume)
         builder_nonatomic_map_coin_bribe[builder][
             transfer_map[full_tx["hash"]]["from"]
         ] += transfer_map[full_tx["hash"]]["value"]
@@ -122,6 +128,7 @@ def analyze_tx(
         # mev bot collected here will be an EOA
         builder_nonatomic_map_tx[builder][addr_from] += 1
         builder_nonatomic_map_vol[builder][addr_from] += tx_volume
+        builder_nonatomic_map_vol_list[builder][addr_from].append(tx_volume)
         builder_nonatomic_map_coin_bribe[builder][addr_from] += full_next_tx["value"]
 
         after_bribe.setdefault(addr_from, []).append(
@@ -139,6 +146,7 @@ def analyze_tx(
     elif tx_index <= top_of_block_boundary:
         builder_nonatomic_map_tx[builder][addr_to] += 1
         builder_nonatomic_map_vol[builder][addr_to] += tx_volume
+        builder_nonatomic_map_vol_list[builder][addr_to].append(tx_volume)
         builder_nonatomic_map_gas_bribe[builder][addr_to] += (
             full_tx["gas"] * full_tx["gasPrice"]
         )
@@ -169,6 +177,7 @@ def analyze_block(
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
@@ -288,6 +297,7 @@ def compile_cefi_defi_data(
     builder_nonatomic_map_vol,
     builder_nonatomic_map_coin_bribe,
     builder_nonatomic_map_gas_bribe,
+    builder_nonatomic_map_vol_list,
     coinbase_bribe,
     after_bribe,
     tob_bribe,
@@ -312,6 +322,10 @@ def compile_cefi_defi_data(
     analysis.dump_dict_to_json(
         builder_nonatomic_map_gas_bribe,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json",
+    )
+    analysis.dump_dict_to_json(
+        builder_nonatomic_map_vol_list,
+        "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_vol_list.json",
     )
 
     agg_block = analysis.aggregate_block_count(builder_nonatomic_map_block)

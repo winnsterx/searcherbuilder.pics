@@ -6,9 +6,9 @@ import chartprep
 if __name__ == "__main__":
     # update the website everyday, but always only show 14 days of results
     # get the last 14 days of data
-    two_weeks_blocks = 1000  # 14 * 24 * 60 * 60 / 12
-    start_block = 17979942
-    # start_block = fetch_blocks.block_number_14_days_ago()
+    two_weeks_blocks = 2000  # 14 * 24 * 60 * 60 / 12
+    # start_block = 18088050
+    start_block = fetch_blocks.block_number_14_days_ago()
     print(start_block)
 
     # fetched_blocks = fetch_blocks.get_blocks(start_block, two_weeks_blocks)
