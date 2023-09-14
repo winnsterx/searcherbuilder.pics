@@ -21,6 +21,7 @@ def map_extra_data_to_builder(extra_data, feeRecipient):
 
 
 def analyze_tx(
+    block_number,
     builder,
     fee_recipient,
     tx,
@@ -52,6 +53,7 @@ def analyze_tx(
         return
     elif mev_type == "swap":
         nonatomic_mev.analyze_tx(
+            block_number,
             builder,
             fee_recipient,
             tx,
@@ -152,6 +154,7 @@ def analyze_block(
                 else:
                     full_next_tx = block["transactions"][tx["tx_index"] + 1]
                 analyze_tx(
+                    block_number,
                     builder,
                     fee_recipient,
                     tx,
@@ -421,9 +424,12 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         builder_nonatomic_map_gas_bribe = defaultdict(lambda: defaultdict(int))
         builder_nonatomic_map_vol_list = defaultdict(lambda: defaultdict(list))
 
-        coinbase_bribe = {}
-        after_bribe = {}
+        # {searcher: {builder: [bribes]}}
+        coinbase_bribe = defaultdict(lambda: defaultdict(list))
+        after_bribe = defaultdict(lambda: defaultdict(list))
+        # {searcher: [{high_gas_tx_info}]}
         tob_bribe = {}
+
     else:
         (
             builder_atomic_map_block,

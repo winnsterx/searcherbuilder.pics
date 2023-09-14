@@ -76,6 +76,7 @@ def followed_by_transfer_to_builder(fee_recipient, cur_tx, next_tx):
 
 # analyze_tx(builder, fee_recipient, swap, full_tx, full_next_tx, transfer_map, top_of_block_boundary, median_gas)
 def analyze_tx(
+    block_number,
     builder,
     fee_recipient,
     swap,
@@ -111,14 +112,14 @@ def analyze_tx(
         builder_nonatomic_map_coin_bribe[builder][
             transfer_map[full_tx["hash"]]["from"]
         ] += transfer_map[full_tx["hash"]]["value"]
+        builder_nonatomic_map_gas_bribe[builder][
+            transfer_map[full_tx["hash"]]["from"]
+        ] += (full_tx["gas"] * full_tx["gasPrice"])
 
-        coinbase_bribe.setdefault(transfer_map[full_tx["hash"]]["from"], []).append(
-            {
-                "hash": full_tx["hash"],
-                "builder": builder,
-                "bribe": transfer_map[full_tx["hash"]]["value"],
-            }
+        coinbase_bribe[transfer_map[full_tx["hash"]]["from"]][builder].append(
+            transfer_map[full_tx["hash"]]["value"]
         )
+
         if addr_to not in addrs_counted_in_block:
             builder_nonatomic_map_block[builder][addr_to] += 1
             addrs_counted_in_block.add(addr_to)
@@ -131,13 +132,8 @@ def analyze_tx(
         builder_nonatomic_map_vol_list[builder][addr_from].append(tx_volume)
         builder_nonatomic_map_coin_bribe[builder][addr_from] += full_next_tx["value"]
 
-        after_bribe.setdefault(addr_from, []).append(
-            {
-                "hash": full_tx["hash"],
-                "builder": builder,
-                "bribe": full_next_tx["value"],
-            }
-        )
+        after_bribe[addr_from][builder].append(full_next_tx["value"])
+
         if addr_from not in addrs_counted_in_block:
             builder_nonatomic_map_block[builder][addr_from] += 1
             addrs_counted_in_block.add(addr_from)
@@ -153,12 +149,10 @@ def analyze_tx(
 
         tob_bribe.setdefault(addr_to, []).append(
             {
-                "hash": full_tx["hash"],
                 "builder": builder,
+                "block_number": block_number,
                 "index": tx_index,
                 "gas_price": full_tx["gasPrice"],
-                "gas": full_tx["gas"],
-                "block_median_gas": median_gas,
             }
         )
         if addr_to not in addrs_counted_in_block:

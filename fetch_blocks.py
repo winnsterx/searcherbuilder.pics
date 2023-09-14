@@ -1,9 +1,11 @@
+import traceback
 from decimal import Decimal
 import requests, json, time, ijson, os
 from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
+import update_worker
 
 MAX_RETRIES = 5  # Define a maximum number of retries
 INITIAL_BACKOFF = 1  # Define initial backoff time in seconds
@@ -48,7 +50,7 @@ def process_batch_response(response, blocks_fetched):
                 # immediately stop processing this batch of response bc whole batch may be bad
                 return success
             else:
-                block_number = b["id"]
+                block_number = str(b["id"])
                 full_block = b["result"]
                 blocks_fetched[block_number] = simplify_block(full_block)
         return success
@@ -112,24 +114,18 @@ def get_blocks_by_list(block_nums):
     start = time.time()
     print("Fetching blocks at", start)
 
-    # with ThreadPoolExecutor(max_workers=3) as executor:
-    #     # Use the executor to submit the tasks
-    #     futures = [executor.submit(batch_request, first_block_of_batch, end_block, batch_size, 0, blocks_fetched) for first_block_of_batch in range(start_block, end_block + 1, batch_size)]
-    #     for future in as_completed(futures):
-    #         pass
-
-    batch = []
-    for block in block_nums:
-        batch.append(
+    for i in range(0, len(block_nums), batch_size):
+        batch = [
             {
                 "jsonrpc": "2.0",
                 "id": block,
                 "method": "eth_getBlockByNumber",
                 "params": [hex(block), True],
             }
-        )
+            for block in block_nums[i : i + batch_size]
+        ]
 
-    batch_request(batch, 0, blocks_fetched)
+        batch_request(batch, 0, blocks_fetched)
 
     print("Finished fetching blocks in", time.time() - start, " seconds")
     return blocks_fetched
@@ -171,12 +167,18 @@ def count_blocks(blocks, start_block):
     missing = []
     block_num = start_block
 
+    # for b, _ in blocks.items():
+    #     if block_num != int(b):
+    #         print("out of order")
+    #     block_num += 1
+
     for b, _ in blocks.items():
         # b > block_number
         while int(b) > block_num:
             print("missing / out of order block number", b, "isnt ", block_num)
             missing.append(block_num)
             block_num += 1
+
         block_num += 1
     print(
         f"all {len(blocks)} blocks are in order and present, ending at", block_num - 1
@@ -250,7 +252,9 @@ def get_internal_transfers_to_fee_recipient_in_block(
                 }
             ],
         }
+
         response = requests.post(secret_keys.ALCHEMY, json=payload, headers=headers)
+        print(block_number)
         transfers = response.json()["result"]["transfers"]
         transfer_map = {
             tr["hash"]: {"from": tr["from"], "to": tr["to"], "value": tr["value"]}
@@ -258,7 +262,8 @@ def get_internal_transfers_to_fee_recipient_in_block(
         }
         all_internal_transfers[block_number] = transfer_map
     except Exception as e:
-        print("error found in one block", e)
+        print("error found in one block", e, block_number)
+        print(traceback.format_exc())
 
 
 def get_internal_transfers_to_fee_recipients_in_blocks(blocks):
@@ -280,15 +285,6 @@ def get_internal_transfers_to_fee_recipients_in_blocks(blocks):
             pass
 
     return all_internal_transfers
-
-
-def get_blocks_by_number(block_nums):
-    blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
-    res = {}
-    for num in block_nums:
-        res[num] = blocks[str(num)]
-
-    return res
 
 
 def simplify_receipts(receipts):
@@ -314,8 +310,9 @@ def get_block_receipts(session, block_num, all_receipts):
     headers = {"accept": "application/json", "content-type": "application/json"}
     response = session.post(secret_keys.ALCHEMY, json=payload, headers=headers)
     response = response.json()["result"]["receipts"]
+    print(block_num)
     response = simplify_receipts(response)
-    all_receipts[block_num] = response
+    all_receipts[str(block_num)] = response
 
 
 def get_blocks_receipts_by_list(blocks_nums):
@@ -357,7 +354,7 @@ def get_blocks_receipts(start_block, num_blocks):
     return all_receipts
 
 
-def block_number_14_days_ago():
+def get_new_start_and_end_block_nums():
     # Current block number
     payload = {"id": 1, "jsonrpc": "2.0", "method": "eth_blockNumber"}
     headers = {"accept": "application/json", "content-type": "application/json"}
@@ -371,34 +368,59 @@ def block_number_14_days_ago():
     # Ethereum block time is roughly 15 seconds
     # 14 days = 14 * 24 * 60 * 60 seconds
     blocks_in_14_days = (14 * 24 * 60 * 60) / 12
-    return current_block_number - int(blocks_in_14_days)
+    return current_block_number - int(blocks_in_14_days), current_block_number
 
 
 if __name__ == "__main__":
-    # start_block = 17595510 #  Jul-01-2023 12:00:11 AM +UTC
-    # num_blocks = 223200 # 31 * 24 * 60 * 60 / 12
-    # end_block = 17818710 # Aug 1 2023
-    # num_blocks = 360000 # 31 * 24 * 60 * 60 / 12
-    # end_block = 17955510 # Aug-20-2023 10:58:47 AM +UTC
-    # start_block = 17818710  # Aug 1 2023
-    # num_blocks = 108000  # 15 * 24 * 60 * 60 / 12
-    # end_block = 17926710  # Aug-16-2023 10:00:47 AM
-    # end_block = 18041910 # Sep 01 2023 06:11:39 GMT-0700
-    # start_block = 17926710  # 8/16
-    # num_blocks = 93600  # 13 * 24 * 60 * 60 / 12
-    # end_block = 18020310  # 8/29
+    receipts = analysis.load_dict_from_json(
+        "blockchain_data/receipt_data/fourteen_day_receipts.json"
+    )
+    receipts = dict(sorted(receipts.items()))
+    missing = count_blocks(receipts, 18035586)  # end on 17955510
 
-    start = 17969910
-    num_blocks = 50400
-    end = 18020309
+    # start = 17969910
+    # num_blocks = 50400
+    # end = 18020309
+    # new_start = 18035586
+    # # new_end = 18035588
+    # new_end = 18136386
+    # updated_blocks = analysis.load_dict_from_json(update_worker.BLOCK_FILE)
+    # new_start = 18035586
+    # # new_end = 18035588
+    # new_end = 18136386
+    # updated_receipts = update_worker.update_receipt_files(new_start, new_end)
+    # analysis.dump_dict_to_json(updated_receipts, RECEIPT_FILE)
+    # print("block finished loading")
+    # updated_trs = get_internal_transfers_to_fee_recipients_in_blocks(updated_blocks)
+    # analysis.dump_dict_to_json(updated_trs, update_worker.TR_FILE)
 
-    blocks = get_blocks(18071077, 1)
-    receipts = get_blocks_receipts(18071077, 1)
-    internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
-    # blocks = dict(sorted(blocks.items()))
-    analysis.dump_dict_to_json(blocks, "block_18071077.json")
-    analysis.dump_dict_to_json(receipts, "receipt_18071077.json")
-    analysis.dump_dict_to_json(internal_transfers, "internal_transfers_18071077.json")
+    # trs = analysis.load_dict_from_json("complete_trs.json")
+    # trs = dict(sorted(trs.items()))
+    # # sorted_internal_transfers = dict(sorted(trs.items()))
+    # # print(len(trs))
+    # missing = count_blocks(trs, 18035586)  # end on 17955510
+
+    # missing_blocks = {}
+    # for b in missing:
+    #     missing_blocks[str(b)] = updated_blocks[str(b)]
+
+    # missing_trs = get_internal_transfers_to_fee_recipients_in_blocks(missing_blocks)
+    # for t, v in missing_trs.items():
+    #     trs[t] = v
+
+    # trs = dict(sorted(trs.items()))
+
+    # analysis.dump_dict_to_json(trs, "complete_trs.json")
+    # internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
+    # receipts = get_blocks_receipts(18035586, 3)
+    # # # blocks = dict(sorted(blocks.items()))
+    # analysis.dump_dict_to_json(blocks, "blockchain_data/block_data/small_block.json")
+    # analysis.dump_dict_to_json(
+    #     receipts, "blockchain_data/receipt_data/small_receipt.json"
+    # )
+    # analysis.dump_dict_to_json(
+    #     internal_transfers, "blockchain_data/transfer_data/small_transfer.json"
+    # )
 
     # blocks = analysis.load_dict_from_json("block_data/aug_second_half.json")
     # count_blocks(blocks, start_block)
