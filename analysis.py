@@ -1,17 +1,15 @@
-import os, time, math
+import os
+from decimal import Decimal
 import pandas as pd
 import json
-import collections
+import ijson
 import constants
-import analysis
 from collections import defaultdict, Counter
 from itertools import islice
 import statistics
-import requests
-import secret_keys
-import functools
-import visual_analysis
-import fetch_blocks, chartprep, atomic_mev, main_mev
+import atomic_mev, main_mev
+
+# FILE METHODS
 
 
 def load_dict_from_json(filename):
@@ -20,15 +18,53 @@ def load_dict_from_json(filename):
         return dict
 
 
-def load_nested_dict_from_json(filename, lamb):
-    with open(filename) as file:
-        dict = json.load(file, object_hook=functools.partial(defaultdict, lambda: lamb))
-        return dict
-
-
 def dump_dict_to_json(dict, filename):
     with open(filename, "w+") as fp:
         json.dump(dict, fp)
+
+
+def decimal_serializer(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)  # or use str(obj) if you want the exact string representation
+    raise TypeError("Type not serializable")
+
+
+def merge_large_json_files(file_list, output_file):
+    with open(output_file, "w") as outfile:
+        outfile.write("{")  # start of json
+
+        # flag to keep track if we need to write a comma
+        write_comma = False
+
+        for file in file_list:
+            with open(file, "rb") as infile:
+                # process file
+                objects = ijson.kvitems(infile, "")
+                for key, value in objects:
+                    # if not first object, add a comma
+                    if write_comma:
+                        outfile.write(",")
+                    outfile.write(
+                        json.dumps(key)
+                        + ":"
+                        + json.dumps(value, default=decimal_serializer)
+                    )  # add block_number: block_detail pair
+                    write_comma = True
+
+        outfile.write("}")  # end of json
+
+
+def prepare_file_list(dir, keyword="", sort=True):
+    # dir = block_data, no /
+    files = os.listdir(dir)
+    file_list = []
+    for file in files:
+        if keyword in file:
+            file = dir + "/" + file
+            file_list.append(file)
+    if sort:
+        file_list = sorted(file_list)
+    return file_list
 
 
 def find_joint_between_two_aggs(db_one, db_two):
@@ -48,12 +84,11 @@ def return_non_mev_bots(bots, dir):
     ).keys()
     # eliminate bots did coinbase transfers
     coinbase_bots = load_dict_from_json(dir + "coinbase_bribes.json").keys()
-    # eliminate bots that i labeled
-    mine_bots = load_dict_from_json("searcher_databases/mine_searchers.json").keys()
+
     return {
         k: v
         for k, v in bots.items()
-        if k not in etherscan_bots and k not in coinbase_bots and k not in mine_bots
+        if k not in etherscan_bots and k not in coinbase_bots
     }
 
 
@@ -64,57 +99,12 @@ def return_mev_bots(bots, dir):
     ).keys()
     # eliminate bots did coinbase transfers
     coinbase_bots = load_dict_from_json(dir + "coinbase_bribe.json").keys()
-    # eliminate bots that i labeled
-    # mine_bots = load_dict_from_json("searcher_databases/mine_searchers.json").keys()
+
     return {k: v for k, v in bots.items() if k in etherscan_bots or k in coinbase_bots}
-
-
-def trim_agg(agg, threshold):
-    sorted_agg = {
-        k: v
-        for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)
-        if v >= threshold
-    }
-    dump_dict_to_json(sorted_agg, agg_dir + "/trimmed_agg.json")
-
-
-def combine_atomic_nonatomic_agg():
-    atomic = load_dict_from_json("atomic/atomic_searchers_agg.json")
-    non_atomic = load_dict_from_json(
-        "non_atomic/above_50_median/cefi_searchers_agg.json"
-    )
-    result = dict(Counter(atomic) + Counter(non_atomic))
-    # sorted_result = {k: v for k, v in sorted(result.items(), key=lambda item: item[1], reverse=True) if v >= 5}
-    sorted_result = {
-        k: v
-        for k, v in sorted(result.items(), key=lambda item: item[1], reverse=True)[:20]
-    }
-    dump_dict_to_json(sorted_result, "all_searchers.json")
-    return sorted_result
-
-
-def remove_coinbase_bribe_searchers(all_nonatomic):
-    coinbase_searchers = load_dict_from_json(
-        "non_atomic/all_swaps/coinbase_bribe.json"
-    ).keys()
-    return {k: v for k, v in all_nonatomic.items() if k not in coinbase_searchers}
 
 
 def slice_dict(d, n):
     return dict(islice(d.items(), n))
-
-
-def rid_map_of_small_addrs(
-    map,
-    agg,
-):
-    trimmed_agg = {k: v for k, v in agg.items() if v >= 100}
-    trimmed_map = defaultdict(lambda: defaultdict(int))
-    for builder, searchers in map.items():
-        for searcher, count in searchers.items():
-            if searcher in trimmed_agg.keys():
-                trimmed_map[builder][searcher] = count
-    return trimmed_map
 
 
 def remove_known_entities_from_agg(agg):
@@ -219,19 +209,6 @@ def remove_atomic_from_map(map, atomic):
     return res
 
 
-def prune(dir, is_atomic):
-    # prune from agg
-    agg_list = fetch_blocks.prepare_file_list(dir + "/agg")
-    for a in agg_list:
-        agg = load_dict_from_json(a)
-        res = remove_known_entities_from_agg(agg)
-        if is_atomic == False:
-            res = remove_atomic_from_agg(
-                res, load_dict_from_json("atomic/new/agg/agg_vol.json")
-            )
-        dump_dict_to_json(res, dir + "/pruned/agg/" + os.path.basename(a))
-
-
 def create_sorted_agg_from_atomic_map(builder_atomic_map):
     # {builder: {searcher: {"total": x, "arb": x, "frontrun": x, "backrun": x, "liquid": x}}}
     # aggregate means adding up the total for each searcher
@@ -253,6 +230,9 @@ def aggregate_block_count(builder_searcher_map_block):
                 agg[searcher] += count
     agg = sort_agg(agg)
     return agg
+
+
+# PRUNE
 
 
 def prune_known_entities_from_map_and_agg(map, agg):
@@ -308,6 +288,9 @@ def prune_known_entities_from_searcher_builder_map(map):
     return res
 
 
+# SORT
+
+
 def sort_agg(agg):
     return {
         k: v for k, v in sorted(agg.items(), key=lambda item: item[1], reverse=True)
@@ -354,6 +337,9 @@ def sort_atomic_map_by_total(map):
         )
     }
     return sorted_map
+
+
+# COMBINE
 
 
 # maps and aggs are pruned of known entities
@@ -405,29 +391,6 @@ def combine_atomic_nonatomic_block_map_and_agg(
     return total_map, total_agg
 
 
-def create_searcher_builder_map(map):
-    res = defaultdict(lambda: defaultdict(int))
-    for builder, searchers in map.items():
-        for searcher, count in searchers.items():
-            res[searcher][builder] += count
-    res = sort_map(res)
-    return res
-
-
-def create_sorted_agg_from_map(map):
-    res = defaultdict(int)
-    for _, searchers in map.items():
-        for searcher, count in searchers.items():
-            res[searcher] += count
-    res = sort_agg(res)
-    return res
-
-
-def wei_to_eth(wei_val):
-    wei_per_eth = 10**18
-    return wei_val / wei_per_eth
-
-
 def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
     wei_per_eth = 10**18
 
@@ -468,6 +431,29 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
     return res, agg
 
 
+def create_searcher_builder_map(map):
+    res = defaultdict(lambda: defaultdict(int))
+    for builder, searchers in map.items():
+        for searcher, count in searchers.items():
+            res[searcher][builder] += count
+    res = sort_map(res)
+    return res
+
+
+def create_sorted_agg_from_map(map):
+    res = defaultdict(int)
+    for _, searchers in map.items():
+        for searcher, count in searchers.items():
+            res[searcher] += count
+    res = sort_agg(res)
+    return res
+
+
+def wei_to_eth(wei_val):
+    wei_per_eth = 10**18
+    return wei_val / wei_per_eth
+
+
 def humanize_number(value, fraction_point=1):
     powers = [10**x for x in (12, 9, 6, 3, 0)]
     human_powers = ("T", "B", "M", "K", "")
@@ -493,18 +479,6 @@ def humanize_number(value, fraction_point=1):
     return return_value
 
 
-# def get_builder_market_share_percentage(map):
-#     builder_market_share = {}
-
-#     for builder, searchers in map.items():
-#         builder_market_share[builder] = sum(searchers.values())
-#     total_count = sum(builder_market_share.values())
-#     for builder, count in builder_market_share.items():
-#         builder_market_share[builder] = count / total_count * 100
-
-#     return builder_market_share
-
-
 def get_builder_market_share_percentage(map):
     builder_market_share = {}
 
@@ -516,10 +490,10 @@ def get_builder_market_share_percentage(map):
     for builder, count in builder_market_share.items():
         builder_market_share[builder] = count / total_count * 100
 
-    # adjust the percentages to make sure they sum up to 100
-    adjustment = 100 - sum(builder_market_share.values())
-    builder_with_max_share = max(builder_market_share, key=builder_market_share.get)
-    builder_market_share[builder_with_max_share] += adjustment
+    # # adjust the percentages to make sure they sum up to 100
+    # adjustment = 100 - sum(builder_market_share.values())
+    # builder_with_max_share = max(builder_market_share, key=builder_market_share.get)
+    # builder_market_share[builder_with_max_share] += adjustment
 
     return builder_market_share
 
@@ -549,7 +523,6 @@ def find_notable_searcher_builder_relationships(map):
     cutoff = 20  # only look at the top 20 interesting relationships
     i = 0
     builder_market_share = get_builder_market_share_percentage(map)  # by the metric
-    dump_dict_to_json(searcher_builder_map, "searcher_b_nap.json")
 
     for searcher, builders in searcher_builder_map.items():
         if i >= cutoff:
@@ -709,80 +682,4 @@ def create_searcher_builder_vol_list_map(map_vol_list):
     return searcher_builder_map
 
 
-if __name__ == "__main__":
-    start = 17969910
-    num_blocks = 50400
-    end = 18020309
-
-    map_tx = load_dict_from_json(
-        "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_tx.json"
-    )
-    map_vol = load_dict_from_json(
-        "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_vol.json"
-    )
-
-    dump_dict_to_json(
-        create_searcher_builder_average_vol_map(map_tx, map_vol),
-        "searcher_builder_avg.json",
-    )
-
-    # beaconchain = load_dict_from_json("response_1693950298679.json")
-    # block_numbers = [item["blockNumber"] for item in beaconchain["data"]]
-
-    # blocks = fetch_blocks.get_blocks_by_list(block_numbers)
-    # internal_transfers = (
-    #     fetch_blocks.get_internal_transfers_to_fee_recipients_in_blocks(blocks)
-    # )
-    # receipts = fetch_blocks.get_blocks_receipts_by_list(block_numbers)
-
-    # blocks = load_dict_from_json("block_18071077.json")
-    # internal_transfers = load_dict_from_json("internal_transfers_18071077.json")
-    # receipts = load_dict_from_json("receipt_18071077.json")
-
-    # seven_day_blocks = {
-    #     block_number: block
-    #     for block_number, block in blocks.items()
-    #     if int(block_number) > start and int(block_number) <= end
-    # }
-    # seven_day_receipts = {
-    #     block_number: receipt
-    #     for block_number, receipt in receipts.items()
-    #     if int(block_number) > start and int(block_number) <= end
-    # }
-
-    # builder_profit_map, builder_subsidy_map = calculate_builder_profitability(
-    #     blocks, receipts, internal_transfers
-    # )
-
-    # dump_dict_to_json(sort_agg(builder_profit_map), "builder_profit_map.json")
-    # dump_dict_to_json(sort_agg(builder_subsidy_map), "builder_subsidy_map.json")
-
-    # atomic_gas_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json")
-    # atomic_coin_map = load_dict_from_json("nonatomic/fifty/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json")
-    # combine_gas_and_coin_bribes_in_eth(atomic_gas_map, atomic_coin_map, False, "fifty")
-
-    # nonatomic_map = sort_map(load_dict_from_json("nonatomic/new/builder_nonatomic_maps/builder_nonatomic_map_vol.json"))
-    # nonatomic_agg = load_dict_from_json("nonatomic/new/agg/agg_vol.json")
-    # nonatomic_map, nonatomic_agg = get_map_and_agg_in_range(nonatomic_map, nonatomic_agg, 0.95)
-    # nonatomic_map, nonatomic_agg = analysis.remove_small_builders(nonatomic_map, nonatomic_agg, 1000)
-    # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
-
-    # nonatomic_fig.show()
-    # blocks_agg = load_dict_from_json("atomic/fifty/builder_atomic_maps/builder_atomic_map_block.json")
-    # tally = 0
-    # for builder, searchers in blocks_agg.items():
-    #     tally += searchers['total']
-
-    # right_tally = 17955510-17595510
-    # print(tally, right_tally)
-
-    # searcher_flow = {}
-    # for builder, searchers in nonatomic_map.items():
-    #     for searcher, count in searchers.items():
-    #         searcher_flow[searcher] = searcher_flow.get(searcher, 0) + count
-
-    # for searcher, count in nonatomic_agg.items():
-    #     if searcher_flow[searcher] != count:
-    #         print("not the same!", searcher, count, searcher_flow[searcher])
-
-    # nonatomic_fig = chartprep.create_searcher_builder_sankey(nonatomic_map, nonatomic_agg, "Non-atomic Searcher-Builder Orderflow by Volume (USD, last month)", "USD")
+# if __name__ == "__main__":

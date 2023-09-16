@@ -1,13 +1,4 @@
-import requests
-import traceback
-import re, string
-import json
-import time
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait
-import constants
 import analysis
-import nonatomic_mev, main_mev
 
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
@@ -17,6 +8,7 @@ def analyze_tx(
     tx,
     full_tx,
     transfer_map,
+    block_base_fee,
     addrs_counted_in_block,
     builder_atomic_map_block,
     builder_atomic_map_tx,
@@ -44,13 +36,12 @@ def analyze_tx(
             full_tx["hash"]
         ]["value"]
 
-    else:
-        builder_atomic_map_gas_bribe[builder][addr_to][mev_type] += (
-            full_tx["gas"] * full_tx["gasPrice"]
-        )
-        builder_atomic_map_gas_bribe[builder][addr_to]["total"] += (
-            full_tx["gas"] * full_tx["gasPrice"]
-        )
+    tx_priority_fee = (
+        full_tx["gasUsed"] * full_tx["gasPrice"] - full_tx["gasUsed"] * block_base_fee
+    )
+
+    builder_atomic_map_gas_bribe[builder][addr_to][mev_type] += tx_priority_fee
+    builder_atomic_map_gas_bribe[builder][addr_to]["total"] += tx_priority_fee
 
     # handle info collection depending on mev_type
     if mev_type == "arb" or mev_type == "frontrun":
@@ -97,125 +88,8 @@ def analyze_tx(
             addrs_counted_in_block.add(addr_from)
 
 
-# maps the extradata to builder
-def map_extra_data_to_builder(extra_data, feeRecipient):
-    builder = re.sub(r"\W+", "", extra_data)
-    if builder == "":
-        builder = feeRecipient
-    elif "geth" in builder or "nethermind" in builder or "linux" in builder:
-        builder = "vanilla_builder"
-    return builder
-
-
-# processes addr_tos of all MEV txs in a block
-def analyze_block(
-    session,
-    url,
-    block_number,
-    block,
-    fetched_internal_transfers,
-    builder_atomic_map_block,
-    builder_atomic_map_tx,
-    builder_atomic_map_profit,
-    builder_atomic_map_vol,
-    builder_atomic_map_coin_bribe,
-    builder_atomic_map_gas_bribe,
-    builder_atomic_map_vol_list,
-):
-    try:
-        extra_data = bytes.fromhex(block["extraData"].lstrip("0x")).decode("ISO-8859-1")
-        builder = map_extra_data_to_builder(extra_data, block["feeRecipient"])
-        fee_recipient = block["feeRecipient"]
-        transfer_map = fetched_internal_transfers[block_number]
-        payload = {"block_number": block_number, "count": "1"}
-        res = session.get(url, params=payload)
-
-        if (int(block_number) - 17595510) % 100 == 0:
-            print(block_number)
-
-        builder_atomic_map_block[builder]["total"] += 1
-        addrs_counted_in_block = set()
-
-        if res.status_code == 200:
-            data = res.json()
-            for tx in data:
-                full_tx = block["transactions"][tx["tx_index"]]
-                analyze_tx(
-                    builder,
-                    tx,
-                    full_tx,
-                    transfer_map,
-                    addrs_counted_in_block,
-                    builder_atomic_map_block,
-                    builder_atomic_map_tx,
-                    builder_atomic_map_profit,
-                    builder_atomic_map_vol,
-                    builder_atomic_map_coin_bribe,
-                    builder_atomic_map_gas_bribe,
-                )
-
-        else:
-            print("error w requesting zeromev:", res.status_code)
-    except Exception as e:
-        print("error found in one block", e, block_number)
-        print(traceback.format_exc())
-
-
 def default_searcher_dic():
     return {"total": 0, "arb": 0, "frontrun": 0, "backrun": 0, "liquid": 0}
-
-
-# iterate through all the blocks to create a frequency mapping between builders and searchers
-# use thread pool to expediate process
-def analyze_blocks(fetched_blocks, fetched_internal_transfers):
-    # returns all the MEV txs in that block (are there false negatives?)
-    zeromev_url = "https://data.zeromev.org/v1/mevBlock"
-    builder_atomic_map_block = defaultdict(main_mev.default_block_dic)
-    builder_atomic_map_tx = defaultdict(lambda: defaultdict(default_searcher_dic))
-    builder_atomic_map_profit = defaultdict(lambda: defaultdict(default_searcher_dic))
-    builder_atomic_map_vol = defaultdict(lambda: defaultdict(default_searcher_dic))
-    builder_atomic_map_coin_bribe = defaultdict(
-        lambda: defaultdict(default_searcher_dic)
-    )
-    builder_atomic_map_gas_bribe = defaultdict(
-        lambda: defaultdict(default_searcher_dic)
-    )
-
-    with requests.Session() as session:
-        # Create a ThreadPoolExecutor
-        start = time.time()
-        print("starting to go thru blocks")
-        with ThreadPoolExecutor(max_workers=64) as executor:
-            # Use the executor to submit the tasks
-            futures = [
-                executor.submit(
-                    analyze_block,
-                    session,
-                    zeromev_url,
-                    block_number,
-                    block,
-                    fetched_internal_transfers,
-                    builder_atomic_map_block,
-                    builder_atomic_map_tx,
-                    builder_atomic_map_profit,
-                    builder_atomic_map_vol,
-                    builder_atomic_map_coin_bribe,
-                    builder_atomic_map_gas_bribe,
-                )
-                for block_number, block in fetched_blocks.items()
-            ]
-            for future in as_completed(futures):
-                pass
-        print("finished counting in", time.time() - start, " seconds")
-
-    return (
-        builder_atomic_map_block,
-        builder_atomic_map_tx,
-        builder_atomic_map_profit,
-        builder_atomic_map_vol,
-        builder_atomic_map_coin_bribe,
-        builder_atomic_map_gas_bribe,
-    )
 
 
 def compile_atomic_data(
@@ -277,39 +151,3 @@ def compile_atomic_data(
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_bribe.json",
     )
     analysis.dump_dict_to_json(agg_bribe, "atomic/fourteen/agg/agg_bribe.json")
-
-
-if __name__ == "__main__":
-    # 17563790 to 17779790
-    start = time.time()
-    print(f"Starting to load block from json at {start / 1000}")
-
-    fetched_blocks = analysis.load_dict_from_json("block_data/blocks_50_days.json")
-    fetched_internal_transfers = analysis.load_dict_from_json(
-        "internal_transfers_data/internal_transfers_50_days.json"
-    )
-    pre_analysis = time.time()
-    print(
-        f"Finished loading blocks in {pre_analysis - start} seconds. Now analyzing blocks."
-    )
-    (
-        builder_atomic_map_block,
-        builder_atomic_map_tx,
-        builder_atomic_map_profit,
-        builder_atomic_map_vol,
-        builder_atomic_map_coin_bribe,
-        builder_atomic_map_gas_bribe,
-    ) = analyze_blocks(fetched_blocks, fetched_internal_transfers)
-    post_analysis = time.time()
-    print(
-        f"Finished analysis in {post_analysis - pre_analysis} seconds. Now compiling data."
-    )
-
-    compile_atomic_data(
-        builder_atomic_map_block,
-        builder_atomic_map_tx,
-        builder_atomic_map_profit,
-        builder_atomic_map_vol,
-        builder_atomic_map_coin_bribe,
-        builder_atomic_map_gas_bribe,
-    )

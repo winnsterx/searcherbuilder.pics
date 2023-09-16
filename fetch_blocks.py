@@ -1,14 +1,16 @@
 import traceback
-from decimal import Decimal
-import requests, json, time, ijson, os
+import requests, json, time
 from urllib3.exceptions import IncompleteRead
 import analysis, secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
-import update_worker
+
 
 MAX_RETRIES = 5  # Define a maximum number of retries
 INITIAL_BACKOFF = 1  # Define initial backoff time in seconds
+
+
+# BLOCKS
 
 
 # Simplify a block by keeping only relevant fields
@@ -19,18 +21,14 @@ def simplify_block(block):
         "feeRecipient": block["miner"],
         "baseFeePerGas": int(block.get("baseFeePerGas", "0x0"), 16),
         "gasUsed": int(block.get("gasUsed", "0x0"), 16),
-        "gasLimit": int(block.get("gasLimit", "0x0"), 16),
         "transactions": [
             {
                 "transactionIndex": int(tx["transactionIndex"], 16),
                 "hash": tx["hash"],
                 "from": tx["from"],
                 "to": tx.get("to", "0x0"),
-                "gas": int(tx["gas"], 16),
-                "gasPrice": int(tx.get("gasPrice", "0x0"), 16),
-                "maxFeePerGas": int(tx.get("maxFeePerGas", "0x0"), 16),
-                "maxPriorityFeePerGas": int(tx.get("maxPriorityFeePerGas", "0x0"), 16),
                 "value": int(tx["value"], 16),
+                "gasPrice": int(tx.get("gasPrice", "0x0"), 16),
             }
             for _, tx in enumerate(block["transactions"])
         ],
@@ -127,8 +125,33 @@ def get_blocks_by_list(block_nums):
 
         batch_request(batch, 0, blocks_fetched)
 
-    print("Finished fetching blocks in", time.time() - start, " seconds")
+    print(
+        "Finished fetching initial blocks in",
+        time.time() - start,
+        " seconds. Now adding gasUsed to block txs.",
+    )
+
+    blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
+    print("Finished adding gasUsed to block txs.")
     return blocks_fetched
+
+
+# Attach gasUsed to each tx of blocks using receipt API
+def add_gas_used_to_blocks(blocks):
+    with requests.Session() as session:
+        for block_num, block in blocks.items():
+            receipts = return_one_block_receipts(session, block_num)
+            block_txs_num = len(block["transactions"])
+            for r in receipts:
+                gas_used = r["gas_used"]
+                tx_index = r["tx_index"]
+
+                if tx_index > block_txs_num:
+                    continue
+
+                block["transactions"][tx_index]["gasUsed"] = gas_used
+
+    return blocks
 
 
 # Get all blocks in batch requests of 1000
@@ -139,12 +162,6 @@ def get_blocks(start_block, num_blocks):
 
     start = time.time()
     print("Fetching blocks at", start)
-
-    # with ThreadPoolExecutor(max_workers=3) as executor:
-    #     # Use the executor to submit the tasks
-    #     futures = [executor.submit(batch_request, first_block_of_batch, end_block, batch_size, 0, blocks_fetched) for first_block_of_batch in range(start_block, end_block + 1, batch_size)]
-    #     for future in as_completed(futures):
-    #         pass
 
     for block in range(start_block, end_block + 1, batch_size):
         batch = [
@@ -158,11 +175,18 @@ def get_blocks(start_block, num_blocks):
         ]
         batch_request(batch, 0, blocks_fetched)
 
-    print("Finished fetching blocks in", time.time() - start, "seconds")
+    print(
+        "Finished fetching blocks in",
+        time.time() - start,
+        "seconds. Now adding gasUsed to block txs.",
+    )
+    blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
+    print("Finished adding gas used to txs.")
     return blocks_fetched
 
 
 # Counts that the blocks in block file is in order and present
+# Counts anything that is basically in structure of {block_num: {}}
 def count_blocks(blocks, start_block):
     missing = []
     block_num = start_block
@@ -186,48 +210,7 @@ def count_blocks(blocks, start_block):
     return missing
 
 
-def prepare_file_list(dir, keyword="", sort=True):
-    # dir = block_data, no /
-    files = os.listdir(dir)
-    file_list = []
-    for file in files:
-        if keyword in file:
-            file = dir + "/" + file
-            file_list.append(file)
-    if sort:
-        file_list = sorted(file_list)
-    return file_list
-
-
-def decimal_serializer(obj):
-    if isinstance(obj, Decimal):
-        return float(obj)  # or use str(obj) if you want the exact string representation
-    raise TypeError("Type not serializable")
-
-
-def merge_large_json_files(file_list, output_file):
-    with open(output_file, "w") as outfile:
-        outfile.write("{")  # start of json
-
-        # flag to keep track if we need to write a comma
-        write_comma = False
-
-        for file in file_list:
-            with open(file, "rb") as infile:
-                # process file
-                objects = ijson.kvitems(infile, "")
-                for key, value in objects:
-                    # if not first object, add a comma
-                    if write_comma:
-                        outfile.write(",")
-                    outfile.write(
-                        json.dumps(key)
-                        + ":"
-                        + json.dumps(value, default=decimal_serializer)
-                    )  # add block_number: block_detail pair
-                    write_comma = True
-
-        outfile.write("}")  # end of json
+# INTERNAL TRANSFERS
 
 
 def default_internal_transfer_dic():
@@ -287,6 +270,9 @@ def get_internal_transfers_to_fee_recipients_in_blocks(blocks):
     return all_internal_transfers
 
 
+# RECEIPTS
+
+
 def simplify_receipts(receipts):
     simplified = [
         {
@@ -313,6 +299,21 @@ def get_block_receipts(session, block_num, all_receipts):
     print(block_num)
     response = simplify_receipts(response)
     all_receipts[str(block_num)] = response
+
+
+def return_one_block_receipts(session, block_num):
+    payload = {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "alchemy_getTransactionReceipts",
+        "params": [{"blockNumber": hex(int(block_num))}],
+    }
+    headers = {"accept": "application/json", "content-type": "application/json"}
+    response = session.post(secret_keys.ALCHEMY, json=payload, headers=headers)
+    response = response.json()["result"]["receipts"]
+    print(block_num)
+    response = simplify_receipts(response)
+    return response
 
 
 def get_blocks_receipts_by_list(blocks_nums):
@@ -371,98 +372,4 @@ def get_new_start_and_end_block_nums():
     return current_block_number - int(blocks_in_14_days), current_block_number
 
 
-if __name__ == "__main__":
-    receipts = analysis.load_dict_from_json(
-        "blockchain_data/receipt_data/fourteen_day_receipts.json"
-    )
-    receipts = dict(sorted(receipts.items()))
-    missing = count_blocks(receipts, 18035586)  # end on 17955510
-
-    # start = 17969910
-    # num_blocks = 50400
-    # end = 18020309
-    # new_start = 18035586
-    # # new_end = 18035588
-    # new_end = 18136386
-    # updated_blocks = analysis.load_dict_from_json(update_worker.BLOCK_FILE)
-    # new_start = 18035586
-    # # new_end = 18035588
-    # new_end = 18136386
-    # updated_receipts = update_worker.update_receipt_files(new_start, new_end)
-    # analysis.dump_dict_to_json(updated_receipts, RECEIPT_FILE)
-    # print("block finished loading")
-    # updated_trs = get_internal_transfers_to_fee_recipients_in_blocks(updated_blocks)
-    # analysis.dump_dict_to_json(updated_trs, update_worker.TR_FILE)
-
-    # trs = analysis.load_dict_from_json("complete_trs.json")
-    # trs = dict(sorted(trs.items()))
-    # # sorted_internal_transfers = dict(sorted(trs.items()))
-    # # print(len(trs))
-    # missing = count_blocks(trs, 18035586)  # end on 17955510
-
-    # missing_blocks = {}
-    # for b in missing:
-    #     missing_blocks[str(b)] = updated_blocks[str(b)]
-
-    # missing_trs = get_internal_transfers_to_fee_recipients_in_blocks(missing_blocks)
-    # for t, v in missing_trs.items():
-    #     trs[t] = v
-
-    # trs = dict(sorted(trs.items()))
-
-    # analysis.dump_dict_to_json(trs, "complete_trs.json")
-    # internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(blocks)
-    # receipts = get_blocks_receipts(18035586, 3)
-    # # # blocks = dict(sorted(blocks.items()))
-    # analysis.dump_dict_to_json(blocks, "blockchain_data/block_data/small_block.json")
-    # analysis.dump_dict_to_json(
-    #     receipts, "blockchain_data/receipt_data/small_receipt.json"
-    # )
-    # analysis.dump_dict_to_json(
-    #     internal_transfers, "blockchain_data/transfer_data/small_transfer.json"
-    # )
-
-    # blocks = analysis.load_dict_from_json("block_data/aug_second_half.json")
-    # count_blocks(blocks, start_block)
-
-    # blocks = get_blocks(start_block, num_blocks)
-    # analysis.dump_dict_to_json(blocks, "block_data/now_aug_blocks.json")
-
-    # merge_large_json_files(["block_data/blocks_30_days.json", "block_data/aug_blocks.json"], "blocks_50_days.json")
-
-    # internal_transfers = analysis.load_dict_from_json(
-    #     "internal_transfers_data/internal_transfers_50_days.json"
-    # )
-    # # sorted_internal_transfers = dict(sorted(internal_transfers.items()))
-    # missing = count_blocks(internal_transfers, 17595510)  # end on 17955510
-
-    # aug_blocks = analysis.load_dict_from_json("block_data/aug_second_half.json")
-    # missing_blocks = {
-    #     block_number: block
-    #     for block_number, block in aug_blocks.items()
-    #     if int(block_number) > 17955510
-    # }
-    # missing_internal_transfers = get_internal_transfers_to_fee_recipients_in_blocks(
-    #     missing_blocks
-    # )
-    # analysis.dump_dict_to_json(
-    #     missing_internal_transfers, "missing_internal_transfers.json"
-    # )
-
-    # print(missing)
-    # for i in range(start_block, end_block+1):
-    #     present = blocks[i]
-
-    # files = [
-    #     "internal_transfers_data/internal_transfers_50_days.json",
-    #     "missing_internal_transfers.json",
-    # ]
-    # merge_large_json_files(files, "together_internals.json")
-    # internal_transfers = analysis.load_dict_from_json("together_internals.json")
-    # sorted_internal_transfers = dict(sorted(internal_transfers.items()))
-    # missing = count_blocks(sorted_internal_transfers, 17595510)
-    # if len(missing) < 1:
-    #     analysis.dump_dict_to_json(
-    #         sorted_internal_transfers,
-    #         "internal_transfers_data/internal_transfers_full.json",
-    #     )
+# if __name__ == "__main__":
