@@ -7,6 +7,8 @@ import constants
 from collections import defaultdict, Counter
 from itertools import islice
 import statistics
+import csv
+import re
 import atomic_mev, main_mev
 
 # FILE METHODS
@@ -15,6 +17,8 @@ import atomic_mev, main_mev
 def load_dict_from_json(filename):
     with open(filename) as file:
         dict = json.load(file)
+        if dict == None:
+            dict = {}
         return dict
 
 
@@ -65,6 +69,25 @@ def prepare_file_list(dir, keyword="", sort=True):
     if sort:
         file_list = sorted(file_list)
     return file_list
+
+
+def replace_upper_non_alnum(s):
+    s = re.sub(r"[^a-zA-Z0-9]+", "_", s)
+    return s.upper()
+
+
+def covert_csv_to_json(csv_file):
+    res = {}
+    with open(csv_file, newline="") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            res["key"] = row["property"]
+            # address = row["address"]
+            # label = replace_upper_non_alnum(row["name"])
+            # labeled_contracts[label] = address
+
+    with jsonfile as jsonfile:
+        json.dump(res, jsonfile)
 
 
 def find_joint_between_two_aggs(db_one, db_two):

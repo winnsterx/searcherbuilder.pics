@@ -344,15 +344,15 @@ def create_three_bar_charts_by_metric(
         f"Nonatomic Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})",
         metric,
     )
-    combined_fig = create_searcher_builder_percentage_bar_chart(
-        all_maps_and_agg[4],
-        all_maps_and_agg[5],
-        builder_color_map,
-        f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})",
-        metric,
-    )
+    # combined_fig = create_searcher_builder_percentage_bar_chart(
+    #     all_maps_and_agg[4],
+    #     all_maps_and_agg[5],
+    #     builder_color_map,
+    #     f"Combined Searcher Orderflow Breakdown by Builder in {metric.capitalize()} ({unit})",
+    #     metric,
+    # )
 
-    return atomic_fig, nonatomic_fig, combined_fig
+    return atomic_fig, nonatomic_fig
 
 
 def create_searcher_bar_chart(agg, title, metric):
@@ -432,6 +432,7 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     )
 
     atomic_agg = analysis.load_dict_from_json(f"atomic/fourteen/agg/agg_{metric}.json")
+
     nonatomic_map = analysis.load_dict_from_json(
         f"nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_{metric}.json"
     )
@@ -448,41 +449,58 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     atomic_map, atomic_agg = analysis.prune_known_entities_from_map_and_agg(
         atomic_map, atomic_agg
     )
+
+    atomic_map, atomic_agg = analysis.get_map_and_agg_in_range(
+        atomic_map, atomic_agg, 0.99
+    )
+    print(True if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in atomic_agg else False)
+
     nonatomic_agg = analysis.sort_agg(nonatomic_agg)
     nonatomic_map = analysis.sort_map(nonatomic_map)
     nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
+    scp_status = (
+        True
+        if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in nonatomic_agg
+        and metric == "vol"
+        else False
+    )
+    print("SCP in here", scp_status)
+    print(True if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in atomic_agg else False)
     nonatomic_map, nonatomic_agg = analysis.remove_atomic_from_map_and_agg(
         nonatomic_map, nonatomic_agg, atomic_agg
     )
+    scp_status = (
+        True
+        if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in nonatomic_agg
+        and metric == "vol"
+        else False
+    )
+    print("SCP in here", scp_status)
+    # combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(
+    #     atomic_map, atomic_agg, nonatomic_map, nonatomic_agg
+    # )
+    # combined_agg = analysis.sort_agg(combined_agg)
+    # combined_map = analysis.sort_map(combined_map)
+    # combined_map, combined_agg = analysis.prune_known_entities_from_map_and_agg(
+    #     combined_map, combined_agg
+    # )
 
-    combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(
-        atomic_map, atomic_agg, nonatomic_map, nonatomic_agg
-    )
-    combined_agg = analysis.sort_agg(combined_agg)
-    combined_map = analysis.sort_map(combined_map)
-    combined_map, combined_agg = analysis.prune_known_entities_from_map_and_agg(
-        combined_map, combined_agg
-    )
-
-    atomic_map, atomic_agg = analysis.get_map_and_agg_in_range(
-        atomic_map, atomic_agg, 0.99
-    )
     nonatomic_map, nonatomic_agg = analysis.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
-    combined_map, combined_agg = analysis.get_map_and_agg_in_range(
-        combined_map, combined_agg, 0.99
-    )
+    # combined_map, combined_agg = analysis.get_map_and_agg_in_range(
+    #     combined_map, combined_agg, 0.99
+    # )
 
     return [
         atomic_map,
         atomic_agg,
         nonatomic_map,
         nonatomic_agg,
-        combined_map,
-        combined_agg,
+        # combined_map,
+        # combined_agg,
     ]
 
 
@@ -511,19 +529,19 @@ def return_sorted_block_map_and_agg_pruned(metric="block"):
     nonatomic_agg = analysis.sort_agg(nonatomic_agg)
     nonatomic_map = analysis.sort_map(nonatomic_map)
 
-    combined_map, combined_agg = analysis.combine_atomic_nonatomic_block_map_and_agg(
-        atomic_map, atomic_agg, nonatomic_map, nonatomic_agg
-    )
-    combined_agg = analysis.sort_agg(combined_agg)
-    combined_map = analysis.sort_map(combined_map)
+    # combined_map, combined_agg = analysis.combine_atomic_nonatomic_block_map_and_agg(
+    #     atomic_map, atomic_agg, nonatomic_map, nonatomic_agg
+    # )
+    # combined_agg = analysis.sort_agg(combined_agg)
+    # combined_map = analysis.sort_map(combined_map)
 
     return [
         atomic_map,
         atomic_agg,
         nonatomic_map,
         nonatomic_agg,
-        combined_map,
-        combined_agg,
+        # combined_map,
+        # combined_agg,
     ]
 
 
@@ -561,18 +579,18 @@ def load_maps_and_aggs_from_dir(metric):
     path = f"data/{metric}/"
     atomic_map = analysis.load_dict_from_json(path + f"atomic_map_{metric}.json")
     nonatomic_map = analysis.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
-    combined_map = analysis.load_dict_from_json(path + f"combined_map_{metric}.json")
+    # combined_map = analysis.load_dict_from_json(path + f"combined_map_{metric}.json")
     atomic_agg = analysis.load_dict_from_json(path + f"atomic_agg_{metric}.json")
     nonatomic_agg = analysis.load_dict_from_json(path + f"nonatomic_agg_{metric}.json")
-    combined_agg = analysis.load_dict_from_json(path + f"combined_agg_{metric}.json")
+    # combined_agg = analysis.load_dict_from_json(path + f"combined_agg_{metric}.json")
 
     return [
         atomic_map,
         atomic_agg,
         nonatomic_map,
         nonatomic_agg,
-        combined_map,
-        combined_agg,
+        # combined_map,
+        # combined_agg,
     ]
 
 
@@ -668,30 +686,12 @@ def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
         for builder in all_builders:
             builders_median[builder] = builders_median_partial.get(builder, 0)
 
-        # all_values = [
-        #     item for sublist in builders_vol_list.values() for item in sublist
-        # ]
-
         if len(builders_median) < 2:
             continue
             # if the searcher has only ever sent txs, not enough data point, we ignore
         avg = statistics.mean(builders_median.values())
         std = statistics.stdev(builders_median.values())
-        # print("for searcher", searcher, avg, std)
-        # print("builder medians", builders_median)
-        # max_val = max(all_values, default=None)
-        # min_val = min(all_values, default=None)
-        # max_val = max(builders_median.values())
-        # min_val = min(builders_median.values())
-        # med_val = statistics.median(builders_median.values())
-        # builders_abs_diff = {
-        #     builder: abs(median - med_val)
-        #     for builder, median in builders_median.items()
-        # }
-        # max_val = max(builders_abs_diff.values())
-        # min_val = min(builders_abs_diff.values())
-        # print("creating grid for", searcher, med_val)
-        constant = abs(0 - avg) / std
+
         # print(constant)
         for builder in all_builders:
             med_val = builders_median.get(builder, 0)

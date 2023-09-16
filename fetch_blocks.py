@@ -131,24 +131,23 @@ def get_blocks_by_list(block_nums):
         " seconds. Now adding gasUsed to block txs.",
     )
 
-    blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
+    # blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
     print("Finished adding gasUsed to block txs.")
     return blocks_fetched
 
 
 # Attach gasUsed to each tx of blocks using receipt API
-def add_gas_used_to_blocks(blocks):
-    with requests.Session() as session:
-        for block_num, block in blocks.items():
-            receipts = return_one_block_receipts(session, block_num)
-            block_txs_num = len(block["transactions"])
-            for r in receipts:
-                gas_used = r["gas_used"]
-                tx_index = r["tx_index"]
-
-                if tx_index > block_txs_num:
-                    continue
-
+def add_gas_used_to_blocks(blocks, receipts):
+    for block_num, block in blocks.items():
+        rs = receipts.get(str(block_num), {})
+        rs_num = len(rs)
+        txs = block["transactions"]
+        for tx in txs:
+            tx_index = tx["transactionIndex"]
+            if tx_index >= rs_num:  #
+                block["transactions"][tx_index]["gasUsed"] = 0
+            else:
+                gas_used = rs[tx_index].get("gas_used", 0)
                 block["transactions"][tx_index]["gasUsed"] = gas_used
 
     return blocks
@@ -180,7 +179,7 @@ def get_blocks(start_block, num_blocks):
         time.time() - start,
         "seconds. Now adding gasUsed to block txs.",
     )
-    blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
+    # blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
     print("Finished adding gas used to txs.")
     return blocks_fetched
 
@@ -335,8 +334,7 @@ def get_blocks_receipts_by_list(blocks_nums):
     return all_receipts
 
 
-def get_blocks_receipts(start_block, num_blocks):
-    end_block = start_block + num_blocks
+def get_blocks_receipts(start_block, end_block):
     all_receipts = defaultdict(lambda: defaultdict)
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
@@ -346,7 +344,7 @@ def get_blocks_receipts(start_block, num_blocks):
             # Use the executor to submit the tasks
             futures = [
                 executor.submit(get_block_receipts, session, block_number, all_receipts)
-                for block_number in range(start_block, end_block)
+                for block_number in range(start_block, end_block + 1)
             ]
             for future in as_completed(futures):
                 pass

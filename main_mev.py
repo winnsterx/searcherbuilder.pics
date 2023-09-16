@@ -124,7 +124,7 @@ def analyze_block(
         # hex-string of feeRecipient. can be builder or proposer
         fee_recipient = block["feeRecipient"]
         block_base_fee = block["baseFeePerGas"]
-        transfer_map = fetched_internal_transfers[block_number]
+        transfer_map = fetched_internal_transfers.get(block_number, {})
 
         top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
 
