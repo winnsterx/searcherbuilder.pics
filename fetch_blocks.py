@@ -131,8 +131,6 @@ def get_blocks_by_list(block_nums):
         " seconds. Now adding gasUsed to block txs.",
     )
 
-    # blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
-    print("Finished adding gasUsed to block txs.")
     return blocks_fetched
 
 
@@ -179,8 +177,6 @@ def get_blocks(start_block, num_blocks):
         time.time() - start,
         "seconds. Now adding gasUsed to block txs.",
     )
-    # blocks_fetched = add_gas_used_to_blocks(blocks_fetched)
-    print("Finished adding gas used to txs.")
     return blocks_fetched
 
 
