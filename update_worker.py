@@ -1,7 +1,10 @@
+import os
+import subprocess
 import fetch_blocks
 import analysis
 import main_mev
 import chartprep
+import secret_keys
 
 BLOCK_DIR = "blockchain_data/block_data/"
 TR_DIR = "blockchain_data/transfer_data/"
@@ -147,7 +150,7 @@ def check_blocks_all_present(blocks, new_start, new_end):
     return full, missing
 
 
-if __name__ == "__main__":
+def update_worker():
     new_start, new_end = fetch_blocks.get_new_start_and_end_block_nums()
 
     fetched_blocks, fetched_trs, fetched_zeromev_blocks = update_block_files(
@@ -172,3 +175,13 @@ if __name__ == "__main__":
 
     # update the charts
     chartprep.create_html_page()
+
+
+if __name__ == "__main__":
+    # Step 1: Generate the static site
+    # update_worker()
+
+    subprocess.run(["cd", secret_keys.HTML_PATH])
+    subprocess.run(["git", "add", "."])
+    subprocess.run(["git", "commit", "-m", "Update static site"])
+    subprocess.run(["git", "push"])
