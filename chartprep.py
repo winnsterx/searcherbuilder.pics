@@ -811,17 +811,6 @@ def create_html_page():
 
     view = dp.Blocks(
         dp.Page(
-            title="Atomic",
-            blocks=[
-                title,
-                head,
-                atomic_tx_bar,
-                atomic_notable_bar,
-                dp.Group(atomic_searcher_pie_tx, atomic_searcher_pie_bribe, columns=2),
-                atomic_heatmap,
-            ],
-        ),
-        dp.Page(
             title="Non-atomic",
             blocks=[
                 title,
@@ -834,10 +823,17 @@ def create_html_page():
                 nonatomic_heatmap,
             ],
         ),
-        # dp.Page(
-        #     title="Combined",
-        #     blocks=[title, head, combined_bribe_bar],
-        # ),
+        dp.Page(
+            title="Atomic",
+            blocks=[
+                title,
+                head,
+                atomic_tx_bar,
+                atomic_notable_bar,
+                dp.Group(atomic_searcher_pie_tx, atomic_searcher_pie_bribe, columns=2),
+                atomic_heatmap,
+            ],
+        ),
     )
     dp.save_report(view, path=secret_keys.HTML_PATH + "/index.html")
 

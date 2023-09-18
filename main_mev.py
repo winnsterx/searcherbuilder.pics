@@ -18,6 +18,40 @@ def map_extra_data_to_builder(extra_data, feeRecipient):
     return builder
 
 
+def fetch_zeromev_block(session, url, block_num, zeromev_blocks):
+    payload = {"block_number": block_num, "count": "1"}
+    try:
+        res = session.get(url, params=payload)
+        if res.status_code == 200:
+            data = res.json()
+            print(block_num)
+            zeromev_blocks[str(block_num)] = data
+    except Exception as e:
+        print("error found in one block", e, block_num)
+        print(traceback.format_exc())
+
+
+def fetch_zeromev_blocks(block_nums):
+    zeromev_url = "https://data.zeromev.org/v1/mevBlock"
+    zeromev_blocks = {}
+    with requests.Session() as session:
+        # Create a ThreadPoolExecutor
+        start = time.time()
+        print("Zero-ing into blocks")
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            # Use the executor to submit the tasks
+            futures = [
+                executor.submit(
+                    fetch_zeromev_block, session, zeromev_url, block_num, zeromev_blocks
+                )
+                for block_num in block_nums
+            ]
+            for future in as_completed(futures):
+                pass
+        print("Finished zeroing in", time.time() - start, " seconds")
+    return zeromev_blocks
+
+
 def analyze_tx(
     block_number,
     builder,
@@ -89,47 +123,12 @@ def analyze_tx(
         )
 
 
-def fetch_zeromev_block(session, url, block_num, zeromev_blocks):
-    payload = {"block_number": block_num, "count": "1"}
-    try:
-        res = session.get(url, params=payload)
-        if res.status_code == 200:
-            data = res.json()
-            print(block_num)
-            zeromev_blocks[str(block_num)] = data
-    except Exception as e:
-        print("error found in one block", e, block_num)
-        print(traceback.format_exc())
-
-
-def fetch_zeromev_blocks(block_nums):
-    zeromev_url = "https://data.zeromev.org/v1/mevBlock"
-    zeromev_blocks = {}
-    with requests.Session() as session:
-        # Create a ThreadPoolExecutor
-        start = time.time()
-        print("Zero-ing into blocks")
-        with ThreadPoolExecutor(max_workers=64) as executor:
-            # Use the executor to submit the tasks
-            futures = [
-                executor.submit(
-                    fetch_zeromev_block, session, zeromev_url, block_num, zeromev_blocks
-                )
-                for block_num in block_nums
-            ]
-            for future in as_completed(futures):
-                pass
-        print("Finished zeroing in", time.time() - start, " seconds")
-    return zeromev_blocks
-
-
 # processes addr_tos of all MEV txs in a block
 def analyze_block(
-    session,
-    url,
     block_number,
     block,
-    fetched_internal_transfers,
+    transfer_map,
+    zeromev_block_txs,
     builder_atomic_map_block,
     builder_atomic_map_tx,
     builder_atomic_map_profit,
@@ -159,12 +158,9 @@ def analyze_block(
         # hex-string of feeRecipient. can be builder or proposer
         fee_recipient = block["feeRecipient"]
         block_base_fee = block["baseFeePerGas"]
-        transfer_map = fetched_internal_transfers.get(block_number, {})
+        # transfer_map = fetched_internal_transfers.get(block_number, {})
 
         top_of_block_boundary = int(total_txs * 0.1) + ((total_txs * 0.1) % 1 > 0)
-
-        payload = {"block_number": block_number, "count": "1"}
-        res = session.get(url, params=payload)
 
         if (int(block_number) - 17595510) % 500 == 0:
             print(block_number)
@@ -174,9 +170,8 @@ def analyze_block(
 
         addrs_counted_in_block = set()
 
-        if res.status_code == 200:
-            data = res.json()
-            for tx in data:
+        if zeromev_block_txs != None or len(zeromev_block_txs) > 0:
+            for tx in zeromev_block_txs:
                 full_tx = block["transactions"][tx["tx_index"]]
                 if tx["tx_index"] == total_txs - 1:  # tx is at the end of the block
                     full_next_tx = {}
@@ -212,7 +207,12 @@ def analyze_block(
                 )
 
         else:
-            print("error w requesting zeromev:", res.status_code, block_number, block)
+            print(
+                "error w requesting zeromev:",
+                block_number,
+                block,
+                zeromev_block_txs,
+            )
     except Exception as e:
         print("error found in one block", e, block_number)
         print(traceback.format_exc())
@@ -229,6 +229,7 @@ def default_block_dic():
 def analyze_blocks(
     fetched_blocks,
     fetched_internal_transfers,
+    fetched_zeromev_blocks,
     builder_atomic_map_block,
     builder_atomic_map_tx,
     builder_atomic_map_profit,
@@ -246,45 +247,41 @@ def analyze_blocks(
     after_bribe,
     tob_bribe,
 ):
-    # returns all the MEV txs in that block (are there false negatives?)
-    zeromev_url = "https://data.zeromev.org/v1/mevBlock"
+    # Create a ThreadPoolExecutor
 
-    with requests.Session() as session:
-        # Create a ThreadPoolExecutor
-        start = time.time()
-        print("Zero-ing into blocks")
-        with ThreadPoolExecutor(max_workers=64) as executor:
-            # Use the executor to submit the tasks
-            futures = [
-                executor.submit(
-                    analyze_block,
-                    session,
-                    zeromev_url,
-                    block_number,
-                    block,
-                    fetched_internal_transfers,
-                    builder_atomic_map_block,
-                    builder_atomic_map_tx,
-                    builder_atomic_map_profit,
-                    builder_atomic_map_vol,
-                    builder_atomic_map_coin_bribe,
-                    builder_atomic_map_gas_bribe,
-                    builder_atomic_map_vol_list,
-                    builder_nonatomic_map_block,
-                    builder_nonatomic_map_tx,
-                    builder_nonatomic_map_vol,
-                    builder_nonatomic_map_coin_bribe,
-                    builder_nonatomic_map_gas_bribe,
-                    builder_nonatomic_map_vol_list,
-                    coinbase_bribe,
-                    after_bribe,
-                    tob_bribe,
-                )
-                for block_number, block in fetched_blocks.items()
-            ]
-            for future in as_completed(futures):
-                pass
-        print("Finished zeroing in", time.time() - start, " seconds")
+    start = time.time()
+    print("Zero-ing into blocks")
+    with ThreadPoolExecutor(max_workers=64) as executor:
+        # Use the executor to submit the tasks
+        futures = [
+            executor.submit(
+                analyze_block,
+                block_number,
+                block,
+                fetched_internal_transfers.get(str(block_number), {}),
+                fetched_zeromev_blocks.get(str(block_number), []),
+                builder_atomic_map_block,
+                builder_atomic_map_tx,
+                builder_atomic_map_profit,
+                builder_atomic_map_vol,
+                builder_atomic_map_coin_bribe,
+                builder_atomic_map_gas_bribe,
+                builder_atomic_map_vol_list,
+                builder_nonatomic_map_block,
+                builder_nonatomic_map_tx,
+                builder_nonatomic_map_vol,
+                builder_nonatomic_map_coin_bribe,
+                builder_nonatomic_map_gas_bribe,
+                builder_nonatomic_map_vol_list,
+                coinbase_bribe,
+                after_bribe,
+                tob_bribe,
+            )
+            for block_number, block in fetched_blocks.items()
+        ]
+        for future in as_completed(futures):
+            pass
+    print("Finished zeroing in", time.time() - start, " seconds")
 
     return (
         builder_atomic_map_block,
@@ -312,7 +309,7 @@ def chunks(data, SIZE=10000):
         yield {k: data[k] for k in islice(it, SIZE)}
 
 
-def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
+def create_mev_analysis(fetched_blocks, fetched_internal_transfers, fetched_zeromev):
     start = time.time()
     print(f"Starting to load blocks at {start / 1000}")
 
@@ -355,6 +352,7 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         analyze_blocks(
             fetched_blocks_chunks,
             fetched_internal_transfers,
+            fetched_zeromev,
             builder_atomic_map_block,
             builder_atomic_map_tx,
             builder_atomic_map_profit,
@@ -401,8 +399,16 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
 
 
 if __name__ == "__main__":
-    block_nums = [str(i) for i in range(18063742, 18063742 + 5000)]
+    block_nums = [str(i) for i in range(18063742, 18063742 + 1)]
     zeromev_blocks = fetch_zeromev_blocks(block_nums)
     analysis.dump_dict_to_json(
-        zeromev_blocks, "blockchain_data/zeromev_data/fourteen_day_zeromev.json"
+        zeromev_blocks, "blockchain_data/zeromev_data/small_zeromev.json"
+    )
+
+    blocks = analysis.load_dict_from_json("blockchain_data/blocks/small_blocks.json")
+    internal_transfers = analysis.load_dict_from_json(
+        "blockchain_data/internal_transfers/small_internal_transfers.json"
+    )
+    zeromev_blocks = analysis.load_dict_from_json(
+        "blockchain_data/zeromev_data/small_zeromev.json"
     )
