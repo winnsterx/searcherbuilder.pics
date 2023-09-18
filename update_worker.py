@@ -178,9 +178,10 @@ def update_worker():
 
 
 if __name__ == "__main__":
-    # Step 1: Generate the static site
-    # update_worker()
+    # Generate the static site
+    update_worker()
 
+    # Push changes to github repo
     subprocess.run(["cd", secret_keys.HTML_PATH])
     subprocess.run(["git", "add", "."])
     subprocess.run(["git", "commit", "-m", "Update static site"])
