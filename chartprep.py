@@ -266,7 +266,6 @@ def create_searcher_builder_percentage_bar_chart(
     map, agg, builder_color_map, mev_domain, metric
 ):
     fig = go.Figure()
-    print("pre prune", agg)
     top_searchers = analysis.slice_dict(agg, 20)
     builder_market_share = {}
 
@@ -276,7 +275,6 @@ def create_searcher_builder_percentage_bar_chart(
         builder_market_share[builder] = sum(searchers.values())
 
     total_count = sum(builder_market_share.values())
-    print("top searchers", top_searchers)
     for builder, searchers in map.items():
         x = []
         y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
@@ -453,54 +451,24 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     atomic_map, atomic_agg = analysis.get_map_and_agg_in_range(
         atomic_map, atomic_agg, 0.99
     )
-    print(True if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in atomic_agg else False)
 
     nonatomic_agg = analysis.sort_agg(nonatomic_agg)
     nonatomic_map = analysis.sort_map(nonatomic_map)
     nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
-    scp_status = (
-        True
-        if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in nonatomic_agg
-        and metric == "vol"
-        else False
-    )
-    print("SCP in here", scp_status)
-    print(True if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in atomic_agg else False)
     nonatomic_map, nonatomic_agg = analysis.remove_atomic_from_map_and_agg(
         nonatomic_map, nonatomic_agg, atomic_agg
     )
-    scp_status = (
-        True
-        if "0xa69babef1ca67a37ffaf7a485dfff3382056e78c" in nonatomic_agg
-        and metric == "vol"
-        else False
-    )
-    print("SCP in here", scp_status)
-    # combined_map, combined_agg = analysis.combine_atomic_nonatomic_map_and_agg(
-    #     atomic_map, atomic_agg, nonatomic_map, nonatomic_agg
-    # )
-    # combined_agg = analysis.sort_agg(combined_agg)
-    # combined_map = analysis.sort_map(combined_map)
-    # combined_map, combined_agg = analysis.prune_known_entities_from_map_and_agg(
-    #     combined_map, combined_agg
-    # )
-
     nonatomic_map, nonatomic_agg = analysis.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
-    # combined_map, combined_agg = analysis.get_map_and_agg_in_range(
-    #     combined_map, combined_agg, 0.99
-    # )
 
     return [
         atomic_map,
         atomic_agg,
         nonatomic_map,
         nonatomic_agg,
-        # combined_map,
-        # combined_agg,
     ]
 
 
@@ -672,16 +640,21 @@ def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
     searcher_builder_median_vol_map = analysis.create_searcher_builder_median_vol_map(
         map_vol_list
     )
-    searcher_builder_vol_list_map = analysis.create_searcher_builder_vol_list_map(
-        map_vol_list
-    )
 
     pruned_map = {}
-    for searcher, _ in agg_vol.items():
+    sliced_agg_vol = analysis.slice_dict(agg_vol, 20)
+    for searcher, _ in sliced_agg_vol.items():
         # for searcher, builders in searcher_builder_median_vol_map.items():
         builders_median_partial = searcher_builder_median_vol_map.get(
             searcher, {}
         )  # {builder: x, builder: x}
+        if searcher == "0xa69babef1ca67a37ffaf7a485dfff3382056e78c":
+            print(
+                "scp",
+                map_vol_list["uwubuilders"][
+                    "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad"
+                ],
+            )
         builders_median = {}
         for builder in all_builders:
             builders_median[builder] = builders_median_partial.get(builder, 0)
@@ -692,7 +665,6 @@ def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
         avg = statistics.mean(builders_median.values())
         std = statistics.stdev(builders_median.values())
 
-        # print(constant)
         for builder in all_builders:
             med_val = builders_median.get(builder, 0)
             z_score = compute_z_score(med_val, avg, std)
@@ -728,7 +700,7 @@ def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
         margin={"t": 150},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
         autosize=False,
-        height=1500,
+        height=1000,
     )
 
     return fig
@@ -755,8 +727,6 @@ def create_html_page():
     all_maps_and_aggs_vol_list = return_map_pruned_of_known_entities_and_atomc(
         "vol_list"
     )
-
-    print("post initial prune", all_maps_and_aggs_vol[1])
 
     dump_data_used(
         [
@@ -826,15 +796,6 @@ def create_html_page():
     nonatomic_searcher_pie_bribe = create_searcher_pie_chart(
         all_maps_and_aggs_bribe[3], "Noatomic Searchers", "Market Shares", "bribe"
     )
-
-    # combined_searcher_pie_tx = create_searcher_pie_chart(
-    #     all_maps_and_aggs_tx[5],
-    #     "Combined Searchers Market Shares",
-    #     "",
-    #     "tx",
-    #     "tx count",
-    #     True,
-    # )
 
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
     head = (

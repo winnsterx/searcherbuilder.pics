@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from collections import defaultdict
 import atomic_mev, nonatomic_mev
+import analysis
 
 
 def map_extra_data_to_builder(extra_data, feeRecipient):
@@ -86,6 +87,40 @@ def analyze_tx(
             builder_atomic_map_gas_bribe,
             builder_atomic_map_vol_list,
         )
+
+
+def fetch_zeromev_block(session, url, block_num, zeromev_blocks):
+    payload = {"block_number": block_num, "count": "1"}
+    try:
+        res = session.get(url, params=payload)
+        if res.status_code == 200:
+            data = res.json()
+            print(block_num)
+            zeromev_blocks[str(block_num)] = data
+    except Exception as e:
+        print("error found in one block", e, block_num)
+        print(traceback.format_exc())
+
+
+def fetch_zeromev_blocks(block_nums):
+    zeromev_url = "https://data.zeromev.org/v1/mevBlock"
+    zeromev_blocks = {}
+    with requests.Session() as session:
+        # Create a ThreadPoolExecutor
+        start = time.time()
+        print("Zero-ing into blocks")
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            # Use the executor to submit the tasks
+            futures = [
+                executor.submit(
+                    fetch_zeromev_block, session, zeromev_url, block_num, zeromev_blocks
+                )
+                for block_num in block_nums
+            ]
+            for future in as_completed(futures):
+                pass
+        print("Finished zeroing in", time.time() - start, " seconds")
+    return zeromev_blocks
 
 
 # processes addr_tos of all MEV txs in a block
@@ -362,4 +397,12 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers):
         coinbase_bribe,
         after_bribe,
         tob_bribe,
+    )
+
+
+if __name__ == "__main__":
+    block_nums = [str(i) for i in range(18063742, 18063742 + 5000)]
+    zeromev_blocks = fetch_zeromev_blocks(block_nums)
+    analysis.dump_dict_to_json(
+        zeromev_blocks, "blockchain_data/zeromev_data/fourteen_day_zeromev.json"
     )

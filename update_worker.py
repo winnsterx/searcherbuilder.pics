@@ -11,6 +11,7 @@ TR_FILE = "blockchain_data/transfer_data/fourteen_day_transfers.json"
 BLOCK_FILE_SANS_GASUSED = (
     "blockchain_data/block_data/fourteen_day_blocks_sans_gasUsed.json"
 )
+ZEROMEV_FILE = "blockchain_data/zeromev_data/fourteen_day_zeromev.json"
 
 SMALL_BLOCK_FILE = "blockchain_data/block_data/small_block.json"
 SMALL_TR_FILE = "blockchain_data/transfer_data/small_transfer.json"
@@ -141,38 +142,41 @@ def check_blocks_all_present(blocks, new_start, new_end):
     return full, missing
 
 
-def fill_missing_trs(new_start, new_end, missing_trs, trs, blocks):
-    fill_blocks = {}
-    for b in missing_trs:
-        fill_blocks[str(b)] = blocks[str(b)]
-    fill_trs = fetch_blocks.get_internal_transfers_to_fee_recipients_in_blocks(
-        fill_blocks
+def update_zeromev_file(new_start, new_end):
+    print("Loading old zeromev file")
+    old_zeromev = analysis.load_dict_from_json(ZEROMEV_FILE)
+    to_fetch = find_to_fetch(old_zeromev, new_start, new_end)
+
+    new_zeromev = main_mev.fetch_zeromev_blocks(to_fetch)
+    missing, updated_zeromev = combine_blocks(
+        new_start, new_end, old_zeromev, new_zeromev
     )
-    trs = combine_blocks(new_start, new_end, trs, fill_trs)
-    return trs
+    if len(missing) > 0:
+        print("Missing some ZEROMEV blocks. Failed to combine fully.")
+        print(missing)
+        if len(missing) > 1000:
+            return
 
-
-def fill_missing_blocks(new_start, new_end, missing_blocks, blocks, receipts):
-    fill_blocks = fetch_blocks.get_blocks_by_list(missing_blocks)
-    fill_blocks = fetch_blocks.add_gas_used_to_blocks(fill_blocks, receipts)
-    blocks = combine_blocks(new_start, new_end, blocks, fill_blocks)
-    return blocks
+    return updated_zeromev
 
 
 if __name__ == "__main__":
     new_start, new_end = fetch_blocks.get_new_start_and_end_block_nums()
-    fetched_blocks, fetched_trs = update_block_files(new_start, new_end)
+    print(new_start, new_end)
+    updated_zeromev = update_zeromev_file(new_start, new_end)
+    analysis.dump_dict_to_json(updated_zeromev, ZEROMEV_FILE)
+    # fetched_blocks, fetched_trs = update_block_files(new_start, new_end)
 
-    full_blocks, missing_blocks = check_blocks_all_present(
-        fetched_blocks, new_start, new_end
-    )
-    print("All blocks are present:", full_blocks)
+    # full_blocks, missing_blocks = check_blocks_all_present(
+    #     fetched_blocks, new_start, new_end
+    # )
+    # print("All blocks are present:", full_blocks)
 
-    full_trs, missing_trs = check_blocks_all_present(fetched_trs, new_start, new_end)
-    print("All trs are present:", full_trs)
+    # full_trs, missing_trs = check_blocks_all_present(fetched_trs, new_start, new_end)
+    # print("All trs are present:", full_trs)
 
-    # create maps and aggs used in chartprep
-    main_mev.create_mev_analysis(fetched_blocks, fetched_trs)
+    # # create maps and aggs used in chartprep
+    # main_mev.create_mev_analysis(fetched_blocks, fetched_trs)
 
-    # update the charts
-    chartprep.create_html_page()
+    # # update the charts
+    # chartprep.create_html_page()
