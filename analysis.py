@@ -10,6 +10,7 @@ import statistics
 import csv
 import re
 import atomic_mev, main_mev
+import builder_addr_map, searcher_addr_map
 
 # FILE METHODS
 
@@ -81,13 +82,13 @@ def covert_csv_to_json(csv_file):
     with open(csv_file, newline="") as file:
         reader = csv.DictReader(file)
         for row in reader:
-            res["key"] = row["property"]
+            name = replace_upper_non_alnum(row["project"])
+            res[name] = row["address"].lower()
             # address = row["address"]
             # label = replace_upper_non_alnum(row["name"])
             # labeled_contracts[label] = address
 
-    with jsonfile as jsonfile:
-        json.dump(res, jsonfile)
+    dump_dict_to_json(res, "labeled.json")
 
 
 def find_joint_between_two_aggs(db_one, db_two):
@@ -133,10 +134,7 @@ def slice_dict(d, n):
 def remove_known_entities_from_agg(agg):
     res = {}
     for addr, count in agg.items():
-        if (
-            addr not in constants.COMMON_CONTRACTS
-            and addr not in constants.LABELED_CONTRACTS.values()
-        ):
+        if addr not in constants.ALL_LABELED_CONTRACTS:
             res[addr] = count
     return res
 
@@ -267,10 +265,7 @@ def prune_known_entities_from_map_and_agg(map, agg):
 def prune_known_entities_from_agg(agg):
     res = {}
     for addr, count in agg.items():
-        if (
-            addr not in constants.COMMON_CONTRACTS
-            and addr not in constants.LABELED_CONTRACTS.values()
-        ):
+        if addr not in constants.ALL_LABELED_CONTRACTS:
             res[addr] = count
     return res
 
@@ -279,10 +274,7 @@ def prune_known_entities_from_simple_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for addr, count in searchers.items():
-            if (
-                addr not in constants.COMMON_CONTRACTS
-                and addr not in constants.LABELED_CONTRACTS.values()
-            ):
+            if addr not in constants.ALL_LABELED_CONTRACTS:
                 res[builder][addr] = count
     return res
 
@@ -291,10 +283,7 @@ def prune_known_entities_from_atomic_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for addr, stats in searchers.items():
-            if (
-                addr not in constants.COMMON_CONTRACTS
-                and addr not in constants.LABELED_CONTRACTS.values()
-            ):
+            if addr not in constants.ALL_LABELED_CONTRACTS:
                 res[builder][addr] = stats["total"]
     return res
 
@@ -302,10 +291,7 @@ def prune_known_entities_from_atomic_map(map):
 def prune_known_entities_from_searcher_builder_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for searcher, builders in map.items():
-        if (
-            searcher not in constants.COMMON_CONTRACTS
-            and searcher not in constants.LABELED_CONTRACTS.values()
-        ):
+        if searcher not in constants.ALL_LABELED_CONTRACTS:
             res[searcher] = builders
 
     return res
@@ -605,7 +591,7 @@ def find_notable_searcher_builder_relationships(map):
 
 
 def is_builder_fee_recipient(builder, fee_recipient):
-    for b, addr in constants.BUILDER_ADDR_MAP.items():
+    for b, addr in builder_addr_map.BUILDER_ADDR_MAP.items():
         if b in builder:
             return addr == fee_recipient
     return False
@@ -696,13 +682,14 @@ def create_searcher_builder_median_vol_map(map_vol_list):
     return searcher_builder_map_med
 
 
-def create_searcher_builder_vol_list_map(map_vol_list):
+def create_searcher_builder_number_of_txs_map(map_vol_list):
     searcher_builder_map = {}
     for builder, searchers in map_vol_list.items():
         for searcher, vols in searchers.items():
-            searcher_builder_map.setdefault(searcher, {})[builder] = vols
+            searcher_builder_map.setdefault(searcher, {})[builder] = len(vols)
 
     return searcher_builder_map
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    covert_csv_to_json("orderflow.csv")

@@ -181,8 +181,8 @@ if __name__ == "__main__":
     # Generate the static site
     update_worker()
 
-    # Push changes to github repo
-    subprocess.run(["cd", secret_keys.HTML_PATH])
-    subprocess.run(["git", "add", "."])
-    subprocess.run(["git", "commit", "-m", "Update static site"])
-    subprocess.run(["git", "push"])
+    # Push changes to github
+    subprocess.run(
+        f"cd {secret_keys.HTML_PATH} && git add . && git commit -m 'Update static site' && git push",
+        shell=True,
+    )
