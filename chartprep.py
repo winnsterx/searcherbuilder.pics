@@ -58,8 +58,8 @@ def get_builder_colors_map(list_of_builders):
 def create_searcher_builder_sankey(map, agg, builder_color_map, title, unit, date):
     # nodes is index of searcher + builder, each unique
     # an entity will now be recognized as the index from this list now
-    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;font-weight:normal">({} from {} to {})</span></span>'
-    # span = "<span style=&quot;font-size: 24px;font-weight:bold;&quot;>MEV-Boost Block Flow<br /><span style='font-size:14px;'>(last 30 days)</span></span>"
+    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px">({} from {} to {})</span></span>'
+
     searcher_builder_map = analysis.create_searcher_builder_map(map)
     # nodes = sorted_searchers + list(map.keys())
     nodes = list(agg.keys()) + list(map.keys())
@@ -143,11 +143,8 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count):
 
 
 def create_notable_searcher_builder_percentage_bar_chart(
-    map, metric, mev_domain, builder_color_map, threshold=50
+    map, metric, mev_domain, builder_color_map
 ):
-    """
-    Create chart
-    """
     fig = go.Figure()
     (
         notable,
@@ -159,7 +156,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
     # for builder, share in builder_market_share.items():
     #     builder_market_share[builder] = 100 / builder_num
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable Relationships between {} Searchers & Builders<br /><span style="font-size: 13px;">(Highlighting relationships where a searcher\'s orderflow is sent<br /> to a builder at an usually high rate, by {})</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable Relationships between {} Searchers & Builders<br /><span style="font-size: 15px;">(Highlighting relationships where searchers sent orderflow<br /> to a builder at an usually high rate, ranked by {})</span></span>'
 
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
@@ -258,7 +255,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         margin={"t": 150},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
         autosize=False,
-        height=600,
+        height=700,
     )
 
     return fig
@@ -271,7 +268,7 @@ def create_searcher_builder_percentage_bar_chart(
     top_searchers = analysis.slice_dict(agg, 20)
     builder_market_share = {}
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 13px;">(Ranked by {})</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">(Ranked by {})</span></span>'
 
     for builder, searchers in map.items():
         builder_market_share[builder] = sum(searchers.values())
@@ -332,16 +329,17 @@ def create_searcher_builder_percentage_bar_chart(
         legend={"traceorder": "normal"},
         margin={"t": 110},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
-        autosize=False,
-        height=600,
+        height=700,
     )
 
     return fig
 
 
-def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
+def create_searcher_pie_chart(
+    agg, searcher_color_map, title_1, title_2, metric, legend=False
+):
     if len(title_2) > 1:  # if not combined
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 14px;"> by top 10 searchers (by {})</span></span>'
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;"> (by {})</span></span>'
         title_layout = {
             "text": span.format(title_1, title_2, convert_metric_for_title(metric)),
             "y": 0.9,
@@ -350,10 +348,12 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
             "yanchor": "top",
         }
     else:
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 14px;"> by top 10 searchers (by {})</span></span>'
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;"> (by {})</span></span>'
         title_layout = {"text": span.format(title_1, convert_metric_for_title(metric))}
 
-    agg = analysis.slice_dict(agg, 10)
+    small_searchers = {k: agg[k] for k in list(agg.keys())[15:]}
+    agg = {k: agg[k] for k in list(agg)[:15]}
+    agg.update({"Others": sum(small_searchers.values())})
     searchers = [abbreviate_label(s) for s in list(agg.keys())]
     counts = list(agg.values())
 
@@ -362,7 +362,12 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
             labels=searchers,
             values=counts,
             hole=0.3,  # Optional: to create a donut-like chart
-            # hoverinfo="label+percent+value",
+            hoverinfo="label+percent+value",
+            hovertemplate=(
+                "<b>Searcher:</b> %{label}<br>"
+                "<b>Value:</b> %{value} ETH<br>"
+                "<b>Percentage:</b> %{percent:.2r}%<extra></extra>"
+            ),
         )
     )
 
@@ -371,6 +376,7 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
         title=title_layout,
         showlegend=legend,
         font=dict(family="Courier New, monospace", color="black"),
+        height=550,
     )
     return fig
 
@@ -638,7 +644,7 @@ def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
             hovertemplate="<b>Builder:</b> %{x}<br><b>Searcher:</b> %{y}<br>%{text}<br><b>Z-score:</b> %{z}<extra></extra>",
         )
     )
-    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">Median Transaction Volume between Searcher & Builder<br /><span style="font-size: 14px;font-weight:normal">(Intensity represented by the median transaction volume between <br /> searcher-builder pair, standardized using Z-score)</span></span>'
+    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">Median Transaction Volume between Searcher & Builder<br /><span style="font-size: 15px;">(Intensity represented by the median transaction volume between <br /> searcher-builder pair, standardized using Z-score)</span></span>'
 
     title_layout = {
         "text": span,
@@ -750,17 +756,33 @@ def create_html_page():
     )
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(
-        all_maps_and_aggs_tx[1], "Atomic Searchers", "Market Shares", "tx"
+        all_maps_and_aggs_tx[1],
+        builder_color_map,
+        "Atomic Searchers",
+        "Market Shares",
+        "tx",
     )
     atomic_searcher_pie_bribe = create_searcher_pie_chart(
-        all_maps_and_aggs_bribe[1], "Atomic Searchers", "Market Shares", "bribe"
+        all_maps_and_aggs_bribe[1],
+        builder_color_map,
+        "Atomic Searchers",
+        "Market Shares",
+        "bribe",
     )
 
     nonatomic_searcher_pie_vol = create_searcher_pie_chart(
-        all_maps_and_aggs_vol[3], "Noatomic Searchers", "Market Shares", "vol"
+        all_maps_and_aggs_vol[3],
+        builder_color_map,
+        "Noatomic Searchers",
+        "Market Shares",
+        "vol",
     )
     nonatomic_searcher_pie_bribe = create_searcher_pie_chart(
-        all_maps_and_aggs_bribe[3], "Noatomic Searchers", "Market Shares", "bribe"
+        all_maps_and_aggs_bribe[3],
+        builder_color_map,
+        "Noatomic Searchers",
+        "Market Shares",
+        "bribe",
     )
 
     title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
