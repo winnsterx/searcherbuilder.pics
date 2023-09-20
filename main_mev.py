@@ -9,15 +9,6 @@ import atomic_mev, nonatomic_mev
 import analysis
 
 
-def map_extra_data_to_builder(extra_data, feeRecipient):
-    builder = re.sub(r"\W+", "", extra_data)
-    if builder == "":
-        builder = feeRecipient
-    elif "geth" in builder or "nethermind" in builder or "linux" in builder:
-        builder = "vanilla_builder"
-    return builder
-
-
 def fetch_zeromev_block(session, url, block_num, zeromev_blocks):
     payload = {"block_number": block_num, "count": "1"}
     try:
@@ -50,6 +41,15 @@ def fetch_zeromev_blocks(block_nums):
                 pass
         print("Finished zeroing in", time.time() - start, " seconds")
     return zeromev_blocks
+
+
+def map_extra_data_to_builder(extra_data, feeRecipient):
+    builder = re.sub(r"\W+", "", extra_data)
+    if builder == "":
+        builder = feeRecipient
+    elif "geth" in builder or "nethermind" in builder or "linux" in builder:
+        builder = "vanilla_builder"
+    return builder
 
 
 def analyze_tx(
@@ -398,17 +398,4 @@ def create_mev_analysis(fetched_blocks, fetched_internal_transfers, fetched_zero
     )
 
 
-if __name__ == "__main__":
-    block_nums = [str(i) for i in range(18063742, 18063742 + 1)]
-    zeromev_blocks = fetch_zeromev_blocks(block_nums)
-    analysis.dump_dict_to_json(
-        zeromev_blocks, "blockchain_data/zeromev_data/small_zeromev.json"
-    )
-
-    blocks = analysis.load_dict_from_json("blockchain_data/blocks/small_blocks.json")
-    internal_transfers = analysis.load_dict_from_json(
-        "blockchain_data/internal_transfers/small_internal_transfers.json"
-    )
-    zeromev_blocks = analysis.load_dict_from_json(
-        "blockchain_data/zeromev_data/small_zeromev.json"
-    )
+# if __name__ == "__main__":

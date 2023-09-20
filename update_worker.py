@@ -1,4 +1,4 @@
-import os
+import time
 import subprocess
 import fetch_blocks
 import analysis
@@ -179,7 +179,9 @@ def update_worker():
 
 if __name__ == "__main__":
     # Generate the static site
+    start_time = time.time()
     update_worker()
+    print(f"--- Updating page took total of {time.time() - start_time} seconds ---")
 
     # Push changes to github
     subprocess.run(

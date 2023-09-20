@@ -307,22 +307,27 @@ def sort_agg(agg):
 
 
 def sort_map(map):
-    map = {
-        outer_key: {
-            inner_key: count
-            for inner_key, count in sorted(
-                inner_dict.items(), key=lambda item: item[1], reverse=True
-            )
-        }
+    # Sort each inner dictionary by its values in descending order
+    sorted_inner = {
+        outer_key: dict(
+            sorted(inner_dict.items(), key=lambda item: item[1], reverse=True)
+        )
         for outer_key, inner_dict in map.items()
     }
+
+    # Compute the total count for each builder
     builder_totals = {
-        builder: sum(searchers.values()) for builder, searchers in map.items()
+        builder: sum(searchers.values()) for builder, searchers in sorted_inner.items()
     }
-    builder_totals = sorted(
-        builder_totals.keys(), key=lambda builder: builder_totals[builder], reverse=True
+
+    # Sort builders based on these totals
+    sorted_builders = sorted(
+        builder_totals, key=lambda builder: builder_totals[builder], reverse=True
     )
-    sorted_map = {builder: map[builder] for builder in builder_totals}
+
+    # Create a new dictionary with sorted builders and their corresponding sorted inner dictionaries
+    sorted_map = {builder: sorted_inner[builder] for builder in sorted_builders}
+
     return sorted_map
 
 
@@ -430,11 +435,10 @@ def combine_gas_and_coin_bribes_in_eth(gas_map, coin_map, is_atomic):
             for searcher, gas in searchers.items():
                 res[builder][searcher] += gas / wei_per_eth
 
-        for builder, searchers in gas_map.items():
+        for builder, searchers in coin_map.items():
             for searcher, coin in searchers.items():
                 res[builder][searcher] += coin
         res = sort_map(res)
-        # res = prune_known_entities_from_simple_map(res)
         agg = create_sorted_agg_from_map(res)
 
     return res, agg
@@ -467,6 +471,7 @@ def humanize_number(value, fraction_point=1):
     powers = [10**x for x in (12, 9, 6, 3, 0)]
     human_powers = ("T", "B", "M", "K", "")
     is_negative = False
+    return_value = value
     if not isinstance(value, float):
         value = float(value)
     if value < 0:

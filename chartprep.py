@@ -35,6 +35,17 @@ def abbreviate_label(label, short=False):
         return label
 
 
+def convert_metric_for_title(metric):
+    if metric == "tx":
+        return "Transaction Count"
+    elif metric == "vol":
+        return "Volume"
+    elif metric == "bribe":
+        return "ETH Transfers + Priority Fees"
+    elif metric == "block":
+        return "Block Count"
+
+
 def get_builder_colors_map(list_of_builders):
     colors = sns.color_palette(cc.glasbey_hv, len(list_of_builders))
     # random.shuffle(colors)
@@ -131,37 +142,6 @@ def prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count):
     return map, agg
 
 
-def create_three_sankeys_by_metric(
-    all_maps_and_agg, builder_color_map, metric, unit, percentile, min_count
-):
-    for i in range(0, len(all_maps_and_agg), 2):
-        map = all_maps_and_agg[i]
-        agg = all_maps_and_agg[i + 1]
-        map, agg = prune_map_and_agg_for_sankey(map, agg, metric, percentile, min_count)
-        all_maps_and_agg[i] = map
-        all_maps_and_agg[i + 1] = agg
-
-    atomic_fig = create_searcher_builder_sankey(
-        all_maps_and_agg[0],
-        all_maps_and_agg[1],
-        builder_color_map,
-        f"Atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})",
-        unit,
-        ("7/1", "8/1"),
-    )
-    nonatomic_fig = create_searcher_builder_sankey(
-        all_maps_and_agg[2],
-        all_maps_and_agg[3],
-        builder_color_map,
-        f"Non-atomic Searcher-Builder Orderflow by {metric.capitalize()} ({unit})",
-        unit,
-        ("7/1", "8/1"),
-    )
-    # combined_fig = create_searcher_builder_sankey(all_maps_and_agg[4], all_maps_and_agg[5], f"Combined Searcher-Builder Orderflow by {metric.capitalize()} ({unit})", unit,  ("7/1", "8/1"))
-
-    return atomic_fig, nonatomic_fig, nonatomic_fig
-
-
 def create_notable_searcher_builder_percentage_bar_chart(
     map, metric, mev_domain, builder_color_map, threshold=50
 ):
@@ -187,6 +167,8 @@ def create_notable_searcher_builder_percentage_bar_chart(
         y_highlighted = []
         x_regular = []
         y_regular = []
+        customdata_highlighted = []
+        customdata_regular = []
 
         for searcher, builders_percent in notable.items():
             if (
@@ -195,12 +177,30 @@ def create_notable_searcher_builder_percentage_bar_chart(
             ) in highlight_relationship:
                 y_highlighted.append(searcher)
                 x_highlighted.append(builders_percent.get(builder, 0))
+                customdata_highlighted.append(
+                    (
+                        builder,
+                        analysis.humanize_number(searchers.get(searcher, 0)),
+                        metric,
+                    )
+                )
             else:
                 y_regular.append(searcher)
                 x_regular.append(builders_percent.get(builder, 0))
+                customdata_regular.append(
+                    (
+                        builder,
+                        analysis.humanize_number(searchers.get(searcher, 0)),
+                        metric,
+                    )
+                )
 
         y_highlighted.insert(0, "Total Market Shares")
         x_highlighted.insert(0, builder_market_share[builder])
+        customdata_highlighted.insert(
+            0,
+            (builder, analysis.humanize_number(sum(searchers.values())), metric),
+        )
         # Trace for non-highlighted bars
         fig.add_trace(
             go.Bar(
@@ -208,7 +208,13 @@ def create_notable_searcher_builder_percentage_bar_chart(
                 x=x_regular[::-1],
                 name=abbreviate_label(builder, True),
                 orientation="h",
-                hovertemplate="<b>%{x:.2r}%<b> ",
+                customdata=customdata_regular[::-1],  # Your additional hover info
+                hovertemplate=(
+                    "<b>Searcher:</b> %{y}<br>"
+                    "<b>Builder:</b> %{customdata[0]}<br>"
+                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
+                ),
                 marker=dict(color="lightgray", line=dict(width=1)),
                 showlegend=False,  # Don't show this in legend
                 legendgroup=builder,  # Use same legendgroup identifier as before
@@ -220,9 +226,15 @@ def create_notable_searcher_builder_percentage_bar_chart(
             go.Bar(
                 y=[abbreviate_label(s, True) for s in y_highlighted[::-1]],
                 x=x_highlighted[::-1],
+                customdata=customdata_highlighted[::-1],  # Your additional hover info
+                hovertemplate=(
+                    "<b>Searcher:</b> %{y}<br>"
+                    "<b>Builder:</b> %{customdata[0]}<br>"
+                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
+                ),
                 name=abbreviate_label(builder, True),
                 orientation="h",
-                hovertemplate="<b>%{x:.2r}%<b> ",
                 marker=dict(color=builder_color_map[builder], line=dict(width=1)),
                 legendgroup=builder,
             )
@@ -252,17 +264,6 @@ def create_notable_searcher_builder_percentage_bar_chart(
     return fig
 
 
-def convert_metric_for_title(metric):
-    if metric == "tx":
-        return "Transaction Count"
-    elif metric == "vol":
-        return "Volume"
-    elif metric == "bribe":
-        return "Gas + ETH Transfers"
-    elif metric == "block":
-        return "Block Count"
-
-
 def create_searcher_builder_percentage_bar_chart(
     map, agg, builder_color_map, mev_domain, metric
 ):
@@ -276,18 +277,26 @@ def create_searcher_builder_percentage_bar_chart(
         builder_market_share[builder] = sum(searchers.values())
 
     total_count = sum(builder_market_share.values())
+
     for builder, searchers in map.items():
         x = []
         y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
-
+        customdata = []
         # adding total market share as comparison
         y.insert(0, "Total Market Shares")
         x.insert(0, builder_market_share[builder] / total_count * 100)
+        customdata.insert(
+            0,
+            (builder, analysis.humanize_number(builder_market_share[builder]), metric),
+        )
         # print(builder, builder_market_share[builder] / total_count)
 
         for searcher, _ in top_searchers.items():
             percent = searchers.get(searcher, 0) / agg[searcher] * 100
             x.append(percent)
+            customdata.append(
+                (builder, analysis.humanize_number(searchers.get(searcher, 0)), metric)
+            )
 
         fig.add_trace(
             go.Bar(
@@ -295,7 +304,13 @@ def create_searcher_builder_percentage_bar_chart(
                 x=x[::-1],
                 name=abbreviate_label(builder, True),
                 orientation="h",
-                hovertemplate="<b>%{x:.2r}%<b> ",
+                customdata=customdata[::-1],  # Your additional hover info
+                hovertemplate=(
+                    "<b>Searcher:</b> %{y}<br>"
+                    "<b>Builder:</b> %{customdata[0]}<br>"
+                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
+                ),
                 marker=dict(color=builder_color_map[builder], line=dict(width=1)),
             )
         )
@@ -324,19 +339,6 @@ def create_searcher_builder_percentage_bar_chart(
     return fig
 
 
-def create_searcher_bar_chart(agg, title, metric):
-    agg = analysis.slice_dict(agg, 15)
-    searchers = [abbreviate_label(s) for s in list(agg.keys())]
-    counts = list(agg.values())
-
-    fig = go.Figure(data=go.Bar(x=searchers, y=counts))
-    fig.update_layout(
-        title="Searcher Counts", xaxis_title="Searcher", yaxis_title="Count"
-    )
-
-    return fig
-
-
 def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
     if len(title_2) > 1:  # if not combined
         span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 14px;"> by top 10 searchers (by {})</span></span>'
@@ -360,7 +362,7 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
             labels=searchers,
             values=counts,
             hole=0.3,  # Optional: to create a donut-like chart
-            hoverinfo="label+percent+value",
+            # hoverinfo="label+percent+value",
         )
     )
 
@@ -410,10 +412,7 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     )
 
     # before, atomic_map is {total, arb,...}. after this, atomic is simple
-    atomic_agg = analysis.sort_agg(atomic_agg)
-    atomic_map = analysis.sort_map(
-        analysis.return_atomic_maps_with_only_type(atomic_map, "total")
-    )
+    atomic_map = analysis.return_atomic_maps_with_only_type(atomic_map, "total")
 
     atomic_map, atomic_agg = analysis.prune_known_entities_from_map_and_agg(
         atomic_map, atomic_agg
@@ -422,9 +421,10 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     atomic_map, atomic_agg = analysis.get_map_and_agg_in_range(
         atomic_map, atomic_agg, 0.99
     )
+    # sort after pruning the known entities
+    atomic_agg = analysis.sort_agg(atomic_agg)
+    atomic_map = analysis.sort_map(atomic_map)
 
-    nonatomic_agg = analysis.sort_agg(nonatomic_agg)
-    nonatomic_map = analysis.sort_map(nonatomic_map)
     nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
@@ -434,6 +434,9 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     nonatomic_map, nonatomic_agg = analysis.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
+
+    nonatomic_agg = analysis.sort_agg(nonatomic_agg)
+    nonatomic_map = analysis.sort_map(nonatomic_map)
 
     return [
         atomic_map,
@@ -528,8 +531,6 @@ def load_maps_and_aggs_from_dir(metric):
         atomic_agg,
         nonatomic_map,
         nonatomic_agg,
-        # combined_map,
-        # combined_agg,
     ]
 
 
@@ -555,13 +556,6 @@ def create_builder_bar_chart(y_type, builder_color_map):
 
     # Show plot
     return fig
-
-
-def normalize_val(max, min, v):
-    if max == min and max == v and min == v:
-        return 1
-    else:
-        return (v - min) / (max - min)
 
 
 def compute_z_score(median, mean, std):
@@ -682,6 +676,7 @@ def create_html_page():
     all_maps_and_aggs_vol = (
         return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("vol")
     )
+
     all_maps_and_aggs_bribe = (
         return_sorted_map_and_agg_pruned_of_known_entities_and_atomc("bribe")
     )
@@ -722,12 +717,12 @@ def create_html_page():
         "vol",
     )
 
-    atomic_heatmap = create_searcher_builder_median_vol_heatmap(
-        all_maps_and_aggs_vol_list[0], all_maps_and_aggs_vol[1]
-    )
-
-    nonatomic_heatmap = create_searcher_builder_median_vol_heatmap(
-        all_maps_and_aggs_vol_list[2], all_maps_and_aggs_vol[3]
+    nonatomic_bribe_bar = create_searcher_builder_percentage_bar_chart(
+        all_maps_and_aggs_bribe[2],
+        all_maps_and_aggs_bribe[3],
+        builder_color_map,
+        "Nonatomic",
+        "bribe",
     )
 
     atomic_tx_bar = create_searcher_builder_percentage_bar_chart(
@@ -736,6 +731,22 @@ def create_html_page():
         builder_color_map,
         "Atomic",
         "tx",
+    )
+
+    atomic_bribe_bar = create_searcher_builder_percentage_bar_chart(
+        all_maps_and_aggs_bribe[0],
+        all_maps_and_aggs_bribe[1],
+        builder_color_map,
+        "Atomic",
+        "bribe",
+    )
+
+    atomic_heatmap = create_searcher_builder_median_vol_heatmap(
+        all_maps_and_aggs_vol_list[0], all_maps_and_aggs_vol[1]
+    )
+
+    nonatomic_heatmap = create_searcher_builder_median_vol_heatmap(
+        all_maps_and_aggs_vol_list[2], all_maps_and_aggs_vol[3]
     )
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(
@@ -770,6 +781,7 @@ def create_html_page():
             blocks=[
                 title,
                 head,
+                nonatomic_bribe_bar,
                 nonatomic_vol_bar,
                 nonatomic_notable_bar,
                 dp.Group(
@@ -783,6 +795,7 @@ def create_html_page():
             blocks=[
                 title,
                 head,
+                atomic_bribe_bar,
                 atomic_tx_bar,
                 atomic_notable_bar,
                 dp.Group(atomic_searcher_pie_tx, atomic_searcher_pie_bribe, columns=2),

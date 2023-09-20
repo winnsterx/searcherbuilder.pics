@@ -77,9 +77,13 @@ def analyze_tx(
         builder_nonatomic_map_tx[builder][addr_from] += 1
         builder_nonatomic_map_vol[builder][addr_from] += tx_volume
         builder_nonatomic_map_vol_list[builder][addr_from].append(tx_volume)
-        builder_nonatomic_map_coin_bribe[builder][addr_from] += full_next_tx["value"]
+        builder_nonatomic_map_coin_bribe[builder][addr_from] += analysis.wei_to_eth(
+            full_next_tx["value"]
+        )
 
-        after_bribe[addr_from][builder].append(full_next_tx["value"])
+        after_bribe[addr_from][builder].append(
+            analysis.wei_to_eth(full_next_tx["value"])
+        )
 
         if addr_from not in addrs_counted_in_block:
             builder_nonatomic_map_block[builder][addr_from] += 1
