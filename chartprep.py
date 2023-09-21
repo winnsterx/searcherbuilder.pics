@@ -41,7 +41,7 @@ def convert_metric_for_title(metric):
     elif metric == "vol":
         return "Volume"
     elif metric == "bribe":
-        return "ETH Transfers + Priority Fees"
+        return "Bribes (Coinbase Transfers + Priority Fees)"
     elif metric == "block":
         return "Block Count"
 
@@ -156,7 +156,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
     # for builder, share in builder_market_share.items():
     #     builder_market_share[builder] = 100 / builder_num
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Notable Relationships between {} Searchers & Builders<br /><span style="font-size: 15px;">(Highlighting relationships where searchers sent orderflow<br /> to a builder at an usually high rate, ranked by {})</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Disproportionate Orderflow Relationships<br /><span style="font-size: 15px;">Filtering out relationships where searchers sent a<br />disproportionate amount of orderflow to a builder, ranked by {}</span></span>'
 
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
@@ -192,7 +192,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
                     )
                 )
 
-        y_highlighted.insert(0, "Total Market Shares")
+        y_highlighted.insert(0, "All Searchers")
         x_highlighted.insert(0, builder_market_share[builder])
         customdata_highlighted.insert(
             0,
@@ -238,7 +238,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         )
 
     title_layout = {
-        "text": span.format(mev_domain, convert_metric_for_title(metric)),
+        "text": span.format(convert_metric_for_title(metric).lower()),
         "y": 0.9,
         "x": 0.5,
         "xanchor": "center",
@@ -268,7 +268,7 @@ def create_searcher_builder_percentage_bar_chart(
     top_searchers = analysis.slice_dict(agg, 20)
     builder_market_share = {}
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">(Ranked by {})</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
 
     for builder, searchers in map.items():
         builder_market_share[builder] = sum(searchers.values())
@@ -280,13 +280,12 @@ def create_searcher_builder_percentage_bar_chart(
         y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
         customdata = []
         # adding total market share as comparison
-        y.insert(0, "Total Market Shares")
+        y.insert(0, "All Searchers")
         x.insert(0, builder_market_share[builder] / total_count * 100)
         customdata.insert(
             0,
             (builder, analysis.humanize_number(builder_market_share[builder]), metric),
         )
-        # print(builder, builder_market_share[builder] / total_count)
 
         for searcher, _ in top_searchers.items():
             percent = searchers.get(searcher, 0) / agg[searcher] * 100
@@ -339,7 +338,7 @@ def create_searcher_pie_chart(
     agg, searcher_color_map, title_1, title_2, metric, legend=False
 ):
     if len(title_2) > 1:  # if not combined
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;"> (by {})</span></span>'
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;"> (By {})</span></span>'
         title_layout = {
             "text": span.format(title_1, title_2, convert_metric_for_title(metric)),
             "y": 0.9,
@@ -348,26 +347,35 @@ def create_searcher_pie_chart(
             "yanchor": "top",
         }
     else:
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;"> (by {})</span></span>'
-        title_layout = {"text": span.format(title_1, convert_metric_for_title(metric))}
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;"> (By {})</span></span>'
+        title_layout = {
+            "text": span.format(title_1, convert_metric_for_title(metric)),
+            "y": 0.9,
+            "x": 0.5,
+            "xanchor": "center",
+            "yanchor": "top",
+        }
+        legend = True
 
-    small_searchers = {k: agg[k] for k in list(agg.keys())[15:]}
-    agg = {k: agg[k] for k in list(agg)[:15]}
+    small_searchers = {k: agg[k] for k in list(agg.keys())[25:]}
+    agg = {k: agg[k] for k in list(agg)[:25]}
     agg.update({"Others": sum(small_searchers.values())})
+    # print(sum(small_searchers.values()))
     searchers = [abbreviate_label(s) for s in list(agg.keys())]
     counts = list(agg.values())
-
+    unit = "ETH" if metric != "tx" else "txs"
     fig = go.Figure(
         data=go.Pie(
             labels=searchers,
             values=counts,
             hole=0.3,  # Optional: to create a donut-like chart
-            hoverinfo="label+percent+value",
             hovertemplate=(
-                "<b>Searcher:</b> %{label}<br>"
-                "<b>Value:</b> %{value} ETH<br>"
-                "<b>Percentage:</b> %{percent:.2r}%<extra></extra>"
+                f"<b>Searcher:</b> %{{label}}<br>"
+                f"<b>Value:</b> %{{value}} {unit}<br>"
+                "<b>Percentage:</b> %{percent}<extra></extra>"
             ),
+            textposition="inside",
+            textinfo="percent",
         )
     )
 
@@ -527,10 +535,9 @@ def load_maps_and_aggs_from_dir(metric):
     path = f"data/{metric}/"
     atomic_map = analysis.load_dict_from_json(path + f"atomic_map_{metric}.json")
     nonatomic_map = analysis.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
-    # combined_map = analysis.load_dict_from_json(path + f"combined_map_{metric}.json")
+
     atomic_agg = analysis.load_dict_from_json(path + f"atomic_agg_{metric}.json")
     nonatomic_agg = analysis.load_dict_from_json(path + f"nonatomic_agg_{metric}.json")
-    # combined_agg = analysis.load_dict_from_json(path + f"combined_agg_{metric}.json")
 
     return [
         atomic_map,
@@ -538,30 +545,6 @@ def load_maps_and_aggs_from_dir(metric):
         nonatomic_map,
         nonatomic_agg,
     ]
-
-
-def create_builder_bar_chart(y_type, builder_color_map):
-    map = analysis.sort_agg(
-        analysis.load_dict_from_json(f"data/builder/builder_{y_type}_map.json")
-    )
-    map = analysis.slice_dict(map, 20)
-    builders = list(map.keys())
-    profits = list(map.values())
-    colors = [builder_color_map[builder] for builder in builders]
-    # Create bar chart
-    abbreviated_builders = [abbreviate_label(b) for b in builders]
-    fig = go.Figure(
-        data=[go.Bar(x=abbreviated_builders, y=profits, marker_color=colors)]
-    )
-    # Add title and labels
-    fig.update_layout(
-        title=f"Builder {y_type.capitalize()} (Last 7 Days)",
-        xaxis_title="Builder",
-        yaxis_title=f"{y_type.capitalize()} (ETH)",
-    )
-
-    # Show plot
-    return fig
 
 
 def compute_z_score(median, mean, std):
@@ -719,7 +702,7 @@ def create_html_page():
         all_maps_and_aggs_vol[2],
         all_maps_and_aggs_vol[3],
         builder_color_map,
-        "Nonatomic",
+        "Non-atomic",
         "vol",
     )
 
@@ -727,7 +710,7 @@ def create_html_page():
         all_maps_and_aggs_bribe[2],
         all_maps_and_aggs_bribe[3],
         builder_color_map,
-        "Nonatomic",
+        "Non-atomic",
         "bribe",
     )
 
@@ -747,51 +730,29 @@ def create_html_page():
         "bribe",
     )
 
-    atomic_heatmap = create_searcher_builder_median_vol_heatmap(
-        all_maps_and_aggs_vol_list[0], all_maps_and_aggs_vol[1]
-    )
-
-    nonatomic_heatmap = create_searcher_builder_median_vol_heatmap(
-        all_maps_and_aggs_vol_list[2], all_maps_and_aggs_vol[3]
-    )
-
     atomic_searcher_pie_tx = create_searcher_pie_chart(
         all_maps_and_aggs_tx[1],
         builder_color_map,
-        "Atomic Searchers",
-        "Market Shares",
+        "Atomic Searchers Market Shares",
+        "",
         "tx",
-    )
-    atomic_searcher_pie_bribe = create_searcher_pie_chart(
-        all_maps_and_aggs_bribe[1],
-        builder_color_map,
-        "Atomic Searchers",
-        "Market Shares",
-        "bribe",
     )
 
     nonatomic_searcher_pie_vol = create_searcher_pie_chart(
         all_maps_and_aggs_vol[3],
         builder_color_map,
-        "Noatomic Searchers",
-        "Market Shares",
+        "Non-atomic Searchers Market Shares",
+        "",
         "vol",
     )
-    nonatomic_searcher_pie_bribe = create_searcher_pie_chart(
-        all_maps_and_aggs_bribe[3],
-        builder_color_map,
-        "Noatomic Searchers",
-        "Market Shares",
-        "bribe",
-    )
 
-    title = "# <p style='text-align: center;margin:0px;'> Searcher Builder Activity Dashboard </p>"
+    title = "# <p style='text-align: center;margin:0px;'> Searcher-Builder Relationship Dashboard </p>"
     head = (
-        "<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Analysis based on txs from last 14 days. Last updated {}.</div>"
+        "<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Based on transactions from last 14 days. Last updated {}.</div>"
         + '<div style ="float:right;font-size:18px;color:#0F1419">View <a href="https://github.com/winnsterx/searcher_database/tree/main/data">raw data</a> </div></div>'
         + '<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
-        + '<a href="https://twitter.com/winnsterx">winnsterx</a> & inspired by '
-        + '<a href="https://mevboost.pics">mevboost.pics</a></div>'
+        + '<a href="https://twitter.com/winnsterx">Winnie</a> at <a href="https://twitter.com/BitwiseInvest">Bitwise</a>. Inspired by '
+        + '<a href="https://mevboost.pics">mevboost.pics</a>.</div>'
         + '<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
         + "\n"
     )
@@ -799,29 +760,25 @@ def create_html_page():
 
     view = dp.Blocks(
         dp.Page(
-            title="Non-atomic",
+            title="Non-atomic MEV",
             blocks=[
                 title,
                 head,
                 nonatomic_bribe_bar,
                 nonatomic_vol_bar,
                 nonatomic_notable_bar,
-                dp.Group(
-                    nonatomic_searcher_pie_vol, nonatomic_searcher_pie_bribe, columns=2
-                ),
-                nonatomic_heatmap,
+                nonatomic_searcher_pie_vol,
             ],
         ),
         dp.Page(
-            title="Atomic",
+            title="Atomic MEV",
             blocks=[
                 title,
                 head,
                 atomic_bribe_bar,
                 atomic_tx_bar,
                 atomic_notable_bar,
-                dp.Group(atomic_searcher_pie_tx, atomic_searcher_pie_bribe, columns=2),
-                atomic_heatmap,
+                atomic_searcher_pie_tx,
             ],
         ),
     )
