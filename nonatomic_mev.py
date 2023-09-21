@@ -43,13 +43,11 @@ def analyze_tx(
     addr_from = swap["address_from"].lower()
 
     if full_tx["hash"] in transfer_map.keys():
-        builder_nonatomic_map_tx[builder][transfer_map[full_tx["hash"]]["from"]] += 1
-        builder_nonatomic_map_vol[builder][
-            transfer_map[full_tx["hash"]]["from"]
-        ] += tx_volume
-        builder_nonatomic_map_vol_list[builder][
-            transfer_map[full_tx["hash"]]["from"]
-        ].append(tx_volume)
+        builder_nonatomic_map_tx[builder][addr_to] += 1
+        builder_nonatomic_map_vol[builder][addr_to] += tx_volume
+        builder_nonatomic_map_vol_list[builder][addr_to].append(tx_volume)
+
+        # the coin bribe may come from a different addr. record who its actually coming from
         builder_nonatomic_map_coin_bribe[builder][
             transfer_map[full_tx["hash"]]["from"]
         ] += transfer_map[full_tx["hash"]]["value"]
@@ -59,9 +57,7 @@ def analyze_tx(
             - full_tx["gasUsed"] * block_base_fee
         )
 
-        builder_nonatomic_map_gas_bribe[builder][
-            transfer_map[full_tx["hash"]]["from"]
-        ] += tx_priority_fee
+        builder_nonatomic_map_gas_bribe[builder][addr_to] += tx_priority_fee
 
         coinbase_bribe[transfer_map[full_tx["hash"]]["from"]][builder].append(
             transfer_map[full_tx["hash"]]["value"]

@@ -39,9 +39,9 @@ def convert_metric_for_title(metric):
     if metric == "tx":
         return "Transaction Count"
     elif metric == "vol":
-        return "Volume"
+        return "Volume (ETH)"
     elif metric == "bribe":
-        return "Bribes (Coinbase Transfers + Priority Fees)"
+        return "Bribes (Coinbase Transfers + Priority Fees, in ETH)"
     elif metric == "block":
         return "Block Count"
 
@@ -156,7 +156,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
     # for builder, share in builder_market_share.items():
     #     builder_market_share[builder] = 100 / builder_num
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Disproportionate Orderflow Relationships<br /><span style="font-size: 15px;">Filtering out relationships where searchers sent a<br />disproportionate amount of orderflow to a builder, ranked by {}</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Disproportionate Orderflow Relationships<br /><span style="font-size: 15px;">Filtering out relationships in which a searcher sent a disproportionate<br /> amount of orderflow to a builder, ranked by {}</span></span>'
 
     for builder, searchers in map.items():
         # Separate data for highlighted and non-highlighted bars
@@ -166,6 +166,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         y_regular = []
         customdata_highlighted = []
         customdata_regular = []
+        unit = "ETH" if metric != "tx" else "txs"
 
         for searcher, builders_percent in notable.items():
             if (
@@ -223,6 +224,10 @@ def create_notable_searcher_builder_percentage_bar_chart(
             go.Bar(
                 y=[abbreviate_label(s, True) for s in y_highlighted[::-1]],
                 x=x_highlighted[::-1],
+                text=[
+                    str(data[1]) + " " + unit for data in customdata_highlighted[::-1]
+                ],
+                textposition="auto",
                 customdata=customdata_highlighted[::-1],  # Your additional hover info
                 hovertemplate=(
                     "<b>Searcher:</b> %{y}<br>"
@@ -247,7 +252,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
 
     fig.update_layout(
         title=title_layout,
-        xaxis_title=f"Percentage of {convert_metric_for_title(metric)}",
+        xaxis_title=generate_xaxis_title(metric),
         yaxis_title="",
         xaxis_range=[0, 100],
         barmode="stack",
@@ -274,7 +279,7 @@ def create_searcher_builder_percentage_bar_chart(
         builder_market_share[builder] = sum(searchers.values())
 
     total_count = sum(builder_market_share.values())
-
+    unit = "ETH" if metric != "tx" else "txs"
     for builder, searchers in map.items():
         x = []
         y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
@@ -299,6 +304,8 @@ def create_searcher_builder_percentage_bar_chart(
                 y=y[::-1],
                 x=x[::-1],
                 name=abbreviate_label(builder, True),
+                text=[str(data[1]) + " " + unit for data in customdata[::-1]],
+                textposition="auto",
                 orientation="h",
                 customdata=customdata[::-1],  # Your additional hover info
                 hovertemplate=(
@@ -312,21 +319,26 @@ def create_searcher_builder_percentage_bar_chart(
         )
 
     title_layout = {
-        "text": span.format(mev_domain, convert_metric_for_title(metric)),
+        "text": span.format(
+            mev_domain,
+            convert_metric_for_title(metric)
+            if metric != "bribe"
+            else "Bribes (Coinbase Transfers + Priority Fees, in ETH)",
+        ),
         "y": 0.9,
-        "x": 0.5,
-        "xanchor": "center",
+        "x": 0.05,
+        "xanchor": "left",
         "yanchor": "top",
     }
 
     fig.update_layout(
         title=title_layout,
-        xaxis_title=f"Percentage of {convert_metric_for_title(metric)}",
+        xaxis_title=generate_xaxis_title(metric),
         yaxis_title="",
         xaxis_range=[0, 100],
         barmode="stack",
         legend={"traceorder": "normal"},
-        margin={"t": 110},  # what gives the spacing between title and plot
+        margin={"t": 120},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
         height=700,
     )
@@ -338,7 +350,7 @@ def create_searcher_pie_chart(
     agg, searcher_color_map, title_1, title_2, metric, legend=False
 ):
     if len(title_2) > 1:  # if not combined
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;"> (By {})</span></span>'
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;">By {}</span></span>'
         title_layout = {
             "text": span.format(title_1, title_2, convert_metric_for_title(metric)),
             "y": 0.9,
@@ -347,7 +359,7 @@ def create_searcher_pie_chart(
             "yanchor": "top",
         }
     else:
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;"> (By {})</span></span>'
+        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;">By {}</span></span>'
         title_layout = {
             "text": span.format(title_1, convert_metric_for_title(metric)),
             "y": 0.9,
@@ -360,7 +372,7 @@ def create_searcher_pie_chart(
     small_searchers = {k: agg[k] for k in list(agg.keys())[25:]}
     agg = {k: agg[k] for k in list(agg)[:25]}
     agg.update({"Others": sum(small_searchers.values())})
-    # print(sum(small_searchers.values()))
+
     searchers = [abbreviate_label(s) for s in list(agg.keys())]
     counts = list(agg.values())
     unit = "ETH" if metric != "tx" else "txs"
@@ -547,107 +559,94 @@ def load_maps_and_aggs_from_dir(metric):
     ]
 
 
-def compute_z_score(median, mean, std):
-    if median == 0:
-        return 0
-    else:
-        z_score = (median - mean) / std
-        return z_score
-
-
-def create_searcher_builder_median_vol_heatmap(map_vol_list, agg_vol):
-    all_builders = list(map_vol_list.keys())
-
-    searcher_builder_median_vol_map = analysis.create_searcher_builder_median_vol_map(
-        map_vol_list
-    )
-    searcher_builder_number_of_txs_map = (
-        analysis.create_searcher_builder_number_of_txs_map(map_vol_list)
-    )
-
-    pruned_map = {}
-    pruned_df_info = {}
-    pruned_median_info = {}
-    sliced_agg_vol = analysis.slice_dict(agg_vol, 20)
-    for searcher, _ in sliced_agg_vol.items():
-        # for searcher, builders in searcher_builder_median_vol_map.items():
-
-        builders_median_partial = searcher_builder_median_vol_map.get(
-            searcher, {}
-        )  # {builder: x, builder: x}
-        builders_num_txs_partial = searcher_builder_number_of_txs_map.get(searcher, {})
-
-        builders_median = {}
-        builders_num_txs = {}
-        for builder in all_builders:
-            builders_median[builder] = builders_median_partial.get(builder, 0)
-            builders_num_txs[builder] = builders_num_txs_partial.get(builder, 0)
-
-        if len(builders_median) < 2:
-            continue
-            # if the searcher has only ever sent txs, not enough data point, we ignore
-        avg = statistics.mean(builders_median.values())
-        std = statistics.stdev(builders_median.values())
-
-        for builder in all_builders:
-            med_val = builders_median.get(builder, 0)
-            z_score = compute_z_score(med_val, avg, std)
-            pruned_map.setdefault(searcher, {})[builder] = z_score
-            pruned_median_info.setdefault(searcher, {})[builder] = med_val
-
-        pruned_df_info[searcher] = builders_num_txs
-
-    df = pd.DataFrame(pruned_map).T
-    df = df.fillna(0)
-    df = df.loc[:, (df != 0).any(axis=0)]
-
-    df_info = pd.DataFrame(pruned_df_info).T
-    df_info = df_info.fillna(0)
-    df_info = df_info.loc[:, (df_info != 0).any(axis=0)]
-
-    df_median_info = pd.DataFrame(pruned_median_info).T
-    df_median_info = df_median_info.fillna(0)
-    df_median_info = df_median_info.loc[:, (df_median_info != 0).any(axis=0)]
-
-    combined_info = [
-        [f"<b># of Txs</b>: {a}<br><b>Median Vol:</b> {b}" for a, b in zip(row1, row2)]
-        for row1, row2 in zip(
-            df_info.iloc[::-1].values, df_median_info.iloc[::-1].values
-        )
-    ]
-
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=df.iloc[::-1],
-            x=[abbreviate_label(s, True) for s in df.columns],
-            y=[abbreviate_label(s, True) for s in df.index[::-1]],
-            colorscale="reds",
-            hoverinfo="z+x+y+text",  # We're adding text to hoverinfo
-            text=combined_info,
-            hovertemplate="<b>Builder:</b> %{x}<br><b>Searcher:</b> %{y}<br>%{text}<br><b>Z-score:</b> %{z}<extra></extra>",
-        )
-    )
-    span = '<span style="font-size: 20px;font-weight:bold; margin-bottom: 10px;">Median Transaction Volume between Searcher & Builder<br /><span style="font-size: 15px;">(Intensity represented by the median transaction volume between <br /> searcher-builder pair, standardized using Z-score)</span></span>'
-
-    title_layout = {
-        "text": span,
-        "y": 0.95,
-        "x": 0.5,
-        "xanchor": "center",
-        "yanchor": "top",
-    }
-
-    fig.update_layout(
-        title=title_layout,
-        xaxis_title="",
-        yaxis_title="",
-        margin={"t": 150},  # what gives the spacing between title and plot
-        font=dict(family="Courier New, monospace", color="black"),
-        autosize=False,
-        height=1000,
-    )
-
+def add_dummy_traces_to_match(fig, target_num_traces):
+    """Add dummy invisible traces to fig to match target_num_traces."""
+    while len(fig.data) < target_num_traces:
+        fig.add_trace(go.Bar(x=[], y=[], visible=False))
     return fig
+
+
+def generate_title(metric, mev_domain):
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
+    title = span.format(mev_domain, convert_metric_for_title(metric))
+    return title
+
+
+def generate_xaxis_title(metric):
+    if metric == "vol":
+        return "Percentage of Volume"
+    elif metric == "bribe":
+        return "Percentage of Total Bribes"
+    elif metric == "tx":
+        return "Percentage of Transactions"
+
+
+def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
+    # Combine the figures. Set the second one as invisible initially.
+    # Determine the max number of traces
+    max_traces = max(len(fig_prime.data), len(fig_bribe.data))
+
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
+
+    # Add dummy traces as necessary to match the number of traces
+    fig_prime = add_dummy_traces_to_match(fig_prime, max_traces)
+    fig_bribe = add_dummy_traces_to_match(fig_bribe, max_traces)
+
+    # Combine and set the toggle logic
+    combined_fig = fig_prime
+    for trace in fig_bribe.data:
+        trace.visible = False
+        combined_fig.add_trace(trace)
+
+    combined_fig.update_layout(
+        updatemenus=[
+            {
+                "type": "dropdown",
+                "direction": "down",
+                "active": 0,
+                "showactive": True,
+                "x": 1.48,
+                "y": 1.08,
+                "xanchor": "right",
+                "yanchor": "bottom",
+                "buttons": [
+                    {
+                        "label": convert_metric_for_title(metric),
+                        "method": "update",
+                        "args": [
+                            {"visible": [True] * max_traces + [False] * max_traces},
+                            {
+                                "title": {
+                                    "text": generate_title(metric, mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
+                                },
+                                "xaxis.title.text": generate_xaxis_title(metric),
+                            },
+                        ],
+                    },
+                    {
+                        "label": "Bribes (ETH)",
+                        "method": "update",
+                        "args": [
+                            {"visible": [False] * max_traces + [True] * max_traces},
+                            {
+                                "title": {
+                                    "text": generate_title(
+                                        "bribe", mev_domain
+                                    )  # Assuming a different metric name for bribes
+                                },
+                                "xaxis.title.text": generate_xaxis_title("bribe"),
+                            },
+                        ],
+                    },
+                ],
+            }
+        ]
+    )
+    return combined_fig
 
 
 def create_html_page():
@@ -714,6 +713,10 @@ def create_html_page():
         "bribe",
     )
 
+    nonatomic_bar = create_toggle(
+        nonatomic_vol_bar, nonatomic_bribe_bar, "vol", "Non-atomic"
+    )
+
     atomic_tx_bar = create_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_tx[0],
         all_maps_and_aggs_tx[1],
@@ -729,6 +732,7 @@ def create_html_page():
         "Atomic",
         "bribe",
     )
+    atomic_bar = create_toggle(atomic_tx_bar, atomic_bribe_bar, "tx", "Atomic")
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(
         all_maps_and_aggs_tx[1],
@@ -751,7 +755,7 @@ def create_html_page():
         "<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Based on transactions from last 14 days. Last updated {}.</div>"
         + '<div style ="float:right;font-size:18px;color:#0F1419">View <a href="https://github.com/winnsterx/searcher_database/tree/main/data">raw data</a> </div></div>'
         + '<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
-        + '<a href="https://twitter.com/winnsterx">Winnie</a> at <a href="https://twitter.com/BitwiseInvest">Bitwise</a>. Inspired by '
+        + '<a href="https://twitter.com/winnsterx">winnsterx</a> at <a href="https://twitter.com/BitwiseInvest">Bitwise</a>. Inspired by '
         + '<a href="https://mevboost.pics">mevboost.pics</a>.</div>'
         + '<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div>'
         + "\n"
@@ -764,8 +768,7 @@ def create_html_page():
             blocks=[
                 title,
                 head,
-                nonatomic_bribe_bar,
-                nonatomic_vol_bar,
+                nonatomic_bar,
                 nonatomic_notable_bar,
                 nonatomic_searcher_pie_vol,
             ],
@@ -775,8 +778,7 @@ def create_html_page():
             blocks=[
                 title,
                 head,
-                atomic_bribe_bar,
-                atomic_tx_bar,
+                atomic_bar,
                 atomic_notable_bar,
                 atomic_searcher_pie_tx,
             ],

@@ -468,6 +468,7 @@ def wei_to_eth(wei_val):
 
 
 def humanize_number(value, fraction_point=1):
+    value = round(value, 2)
     powers = [10**x for x in (12, 9, 6, 3, 0)]
     human_powers = ("T", "B", "M", "K", "")
     is_negative = False

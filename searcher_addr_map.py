@@ -17,7 +17,7 @@ BOBABABE = "0xb0bababe78a9be0810fadf99dd2ed31ed12568be"
 
 SEARCHER_ADDR_LABEL_MAP = {
     JUMP: "Jump Trading 1",
-    JAREDFROMSUBWAY: "jaredfromsubway",
+    JAREDFROMSUBWAY: "jaredfromsubway.eth",
     SYMBOLIC_CAPITAL_PARTNERS_1: "Symbolic Capital Partners 1",
     SYMBOLIC_CAPITAL_PARTNERS_2: "Symbolic Capital Partners 2",
     SYMBOLIC_CAPITAL_PARTNERS_3: "Symbolic Capital Partners 3",
@@ -26,5 +26,5 @@ SEARCHER_ADDR_LABEL_MAP = {
     WINTERMUTE_3: "Wintermute 3",
     WINTERMUTE_4: "Wintermute 4",
     WINTERMUTE_5: "Wintermute 5",
-    BOBABABE: "Boba Babe",
+    BOBABABE: "bobababe",
 }

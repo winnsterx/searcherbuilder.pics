@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from collections import defaultdict
 import atomic_mev, nonatomic_mev
+import builder_addr_map
 import analysis
 
 
@@ -43,12 +44,21 @@ def fetch_zeromev_blocks(block_nums):
     return zeromev_blocks
 
 
+def check_keys_in_string(extra_data):
+    for keyword, label in builder_addr_map.extraData_builder_mapping.items():
+        if keyword in extra_data.lower():
+            return label
+    return extra_data
+
+
 def map_extra_data_to_builder(extra_data, feeRecipient):
     builder = re.sub(r"\W+", "", extra_data)
     if builder == "":
         builder = feeRecipient
-    elif "geth" in builder or "nethermind" in builder or "linux" in builder:
-        builder = "vanilla_builder"
+    # elif "geth" in builder or "nethermind" in builder or "linux" in builder:
+    #     builder = "vanilla_builder"
+    else:
+        builder = check_keys_in_string(builder)
     return builder
 
 
