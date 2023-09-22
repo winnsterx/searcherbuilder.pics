@@ -28,7 +28,7 @@ def fetch_zeromev_blocks(block_nums):
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
-        print("Zero-ing into blocks")
+        print("Fetching Zeromev blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [
@@ -39,7 +39,7 @@ def fetch_zeromev_blocks(block_nums):
             ]
             for future in as_completed(futures):
                 pass
-        print("Finished zeroing in", time.time() - start, " seconds")
+        print("Finished fetching Zeromev blocks in", time.time() - start, " seconds")
     return zeromev_blocks
 
 

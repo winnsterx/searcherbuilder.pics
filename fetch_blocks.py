@@ -65,12 +65,11 @@ def process_batch_response(response, blocks_fetched):
 # def batch_request(first_block_of_batch, end_block, batch_size, retries, blocks_fetched):
 def batch_request(batch, retries, blocks_fetched):
     headers = {"Content-Type": "application/json"}
-    # batch = [{"jsonrpc": "2.0", "id": i, "method":"eth_getBlockByNumber", "params":[hex(i), True]} for i in range(first_block_of_batch, min(first_block_of_batch + batch_size, end_block + 1))]
 
     while retries < MAX_RETRIES:
         try:
             start = time.time()
-            print(f"Fetching batch at {start}, attempt {retries + 1}")
+            print(f"Attempt {retries + 1} at fetching batch.")
             response = requests.post(
                 secret_keys.ALCHEMY, headers=headers, data=json.dumps(batch)
             )
@@ -124,7 +123,7 @@ def get_blocks_by_list(block_nums):
         batch_request(batch, 0, blocks_fetched)
 
     print(
-        "Finished fetching initial blocks in",
+        "Finished fetching blocks in",
         time.time() - start,
         " seconds. Now adding gasUsed to block txs.",
     )
@@ -171,9 +170,9 @@ def get_blocks(start_block, num_blocks):
         batch_request(batch, 0, blocks_fetched)
 
     print(
-        "Finished fetching blocks in",
+        "Finished fetching blocks within",
         time.time() - start,
-        "seconds. Now adding gasUsed to block txs.",
+        "seconds.",
     )
     return blocks_fetched
 
@@ -314,7 +313,7 @@ def get_blocks_receipts_by_list(blocks_nums):
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
-        print("Fetch receipts for blocks")
+        print("Fetching receipts for blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [
@@ -333,7 +332,7 @@ def get_blocks_receipts(start_block, end_block):
     with requests.Session() as session:
         # Create a ThreadPoolExecutor
         start = time.time()
-        print("Fetch receipts for blocks")
+        print("Fetching receipts for blocks")
         with ThreadPoolExecutor(max_workers=64) as executor:
             # Use the executor to submit the tasks
             futures = [

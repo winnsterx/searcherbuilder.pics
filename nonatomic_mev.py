@@ -42,8 +42,8 @@ def analyze_tx(
     tx_index = swap["tx_index"]
     tx_volume = swap.get("user_swap_volume_usd", 0) or 0
 
-    addr_to = swap.get("address_to", "").lower()
-    addr_from = swap.get("address_to", "").lower()
+    addr_to = (swap.get("address_to") or "").lower()
+    addr_from = (swap.get("address_from") or "").lower()  # Corrected to "address_from"
     if addr_to == "" or addr_from == "":
         return
 
