@@ -1,5 +1,5 @@
 import statistics
-import analysis
+import helpers
 
 
 def calculate_block_median_gas_price(transactions):
@@ -80,12 +80,12 @@ def analyze_tx(
         builder_nonatomic_map_tx[builder][addr_from] += 1
         builder_nonatomic_map_vol[builder][addr_from] += tx_volume
         builder_nonatomic_map_vol_list[builder][addr_from].append(tx_volume)
-        builder_nonatomic_map_coin_bribe[builder][addr_from] += analysis.wei_to_eth(
+        builder_nonatomic_map_coin_bribe[builder][addr_from] += helpers.wei_to_eth(
             full_next_tx["value"]
         )
 
         after_bribe[addr_from][builder].append(
-            analysis.wei_to_eth(full_next_tx["value"])
+            helpers.wei_to_eth(full_next_tx["value"])
         )
 
         if addr_from not in addrs_counted_in_block:
@@ -132,60 +132,60 @@ def compile_cefi_defi_data(
     tob_bribe,
 ):
     # trimmed_map = searcher_db.clean_up(builder_nonatomic_map, 5)
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_block,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_block.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_tx,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_tx.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_vol,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_vol.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_coin_bribe,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_coin_bribe.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_gas_bribe,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_gas_bribe.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_vol_list,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_vol_list.json",
     )
 
-    agg_block = analysis.aggregate_block_count(builder_nonatomic_map_block)
-    agg_tx = analysis.create_sorted_agg_from_map(builder_nonatomic_map_tx)
-    agg_vol = analysis.create_sorted_agg_from_map(builder_nonatomic_map_vol)
-    agg_coin = analysis.create_sorted_agg_from_map(builder_nonatomic_map_coin_bribe)
-    agg_gas = analysis.create_sorted_agg_from_map(builder_nonatomic_map_gas_bribe)
-    analysis.dump_dict_to_json(agg_block, "nonatomic/fourteen/agg/agg_block.json")
-    analysis.dump_dict_to_json(agg_tx, "nonatomic/fourteen/agg/agg_tx.json")
-    analysis.dump_dict_to_json(agg_vol, "nonatomic/fourteen/agg/agg_vol.json")
-    analysis.dump_dict_to_json(agg_coin, "nonatomic/fourteen/agg/agg_coin.json")
-    analysis.dump_dict_to_json(agg_gas, "nonatomic/fourteen/agg/agg_gas.json")
+    agg_block = helpers.aggregate_block_count(builder_nonatomic_map_block)
+    agg_tx = helpers.create_sorted_agg_from_map(builder_nonatomic_map_tx)
+    agg_vol = helpers.create_sorted_agg_from_map(builder_nonatomic_map_vol)
+    agg_coin = helpers.create_sorted_agg_from_map(builder_nonatomic_map_coin_bribe)
+    agg_gas = helpers.create_sorted_agg_from_map(builder_nonatomic_map_gas_bribe)
+    helpers.dump_dict_to_json(agg_block, "nonatomic/fourteen/agg/agg_block.json")
+    helpers.dump_dict_to_json(agg_tx, "nonatomic/fourteen/agg/agg_tx.json")
+    helpers.dump_dict_to_json(agg_vol, "nonatomic/fourteen/agg/agg_vol.json")
+    helpers.dump_dict_to_json(agg_coin, "nonatomic/fourteen/agg/agg_coin.json")
+    helpers.dump_dict_to_json(agg_gas, "nonatomic/fourteen/agg/agg_gas.json")
     (
         builder_nonatomic_map_bribe,
         agg_bribe,
-    ) = analysis.combine_gas_and_coin_bribes_in_eth(
+    ) = helpers.combine_gas_and_coin_bribes_in_eth(
         builder_nonatomic_map_gas_bribe, builder_nonatomic_map_coin_bribe, False
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_nonatomic_map_bribe,
         "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_bribe.json",
     )
-    analysis.dump_dict_to_json(agg_bribe, "nonatomic/fourteen/agg/agg_bribe.json")
+    helpers.dump_dict_to_json(agg_bribe, "nonatomic/fourteen/agg/agg_bribe.json")
 
     # bots that are only included when threshold is lower,
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         coinbase_bribe, "nonatomic/fourteen/bribe_specs/coinbase_bribe.json"
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         after_bribe, "nonatomic/fourteen/bribe_specs/after_bribe.json"
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         tob_bribe, "nonatomic/fourteen/bribe_specs/tob_bribe.json"
     )

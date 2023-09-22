@@ -1,7 +1,7 @@
 import traceback
 import requests, json, time
 from urllib3.exceptions import IncompleteRead
-import analysis, secret_keys
+import secret_keys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 
@@ -55,7 +55,6 @@ def process_batch_response(response, blocks_fetched):
 
     except Exception as e:
         print("Exception occurred", e)
-        analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
 
 
 # Sends batch requests of 1000 to node
@@ -92,7 +91,6 @@ def batch_request(batch, retries, blocks_fetched):
             )  # Sleep before next retry with exponential backoff
 
             if retries == MAX_RETRIES:
-                analysis.dump_dict_to_json(blocks_fetched, "blocks_info.json")
                 print("Max retries reached. Exiting.")
         except IncompleteRead as e:
             print(

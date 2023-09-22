@@ -2,9 +2,9 @@ import datapane as dp
 import plotly.graph_objects as go
 from datetime import datetime
 
-import analysis
+import helpers
 import secret_keys
-import searcher_addr_map, builder_addr_map
+import labels.searcher_addr_map as searcher_addr_map, labels.builder_addr_map as builder_addr_map
 import attributes
 
 
@@ -65,7 +65,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         notable,
         builder_market_share,
         highlight_relationship,
-    ) = analysis.find_notable_searcher_builder_relationships(map)
+    ) = helpers.find_notable_searcher_builder_relationships(map)
 
     # builder_num = len(builder_market_share.keys())
     # for builder, share in builder_market_share.items():
@@ -102,7 +102,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
                 customdata_highlighted.append(
                     (
                         builder,
-                        analysis.humanize_number(searchers.get(searcher, 0)),
+                        helpers.humanize_number(searchers.get(searcher, 0)),
                         metric,
                     )
                 )
@@ -123,7 +123,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
                 customdata_regular.append(
                     (
                         builder,
-                        analysis.humanize_number(searchers.get(searcher, 0)),
+                        helpers.humanize_number(searchers.get(searcher, 0)),
                         metric,
                     )
                 )
@@ -139,7 +139,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         x_highlighted.insert(0, builder_market_share[builder])
         customdata_highlighted.insert(
             0,
-            (builder, analysis.humanize_number(sum(searchers.values())), metric),
+            (builder, helpers.humanize_number(sum(searchers.values())), metric),
         )
 
         # Trace for non-highlighted bars
@@ -212,7 +212,7 @@ def create_searcher_builder_percentage_bar_chart(
     map, agg, mev_domain, metric, builder_color_map
 ):
     fig = go.Figure()
-    top_searchers = analysis.slice_dict(agg, 20)
+    top_searchers = helpers.slice_dict(agg, 20)
     builder_market_share = {}
 
     span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by Total {}</span></span>'
@@ -231,14 +231,14 @@ def create_searcher_builder_percentage_bar_chart(
         x.insert(0, builder_market_share[builder] / total_count * 100)
         customdata.insert(
             0,
-            (builder, analysis.humanize_number(builder_market_share[builder]), metric),
+            (builder, helpers.humanize_number(builder_market_share[builder]), metric),
         )
 
         for searcher, _ in top_searchers.items():
             percent = searchers.get(searcher, 0) / agg[searcher] * 100
             x.append(percent)
             customdata.append(
-                (builder, analysis.humanize_number(searchers.get(searcher, 0)), metric)
+                (builder, helpers.humanize_number(searchers.get(searcher, 0)), metric)
             )
 
         fig.add_trace(
@@ -346,45 +346,45 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     sorted, pruned of known entities, (for nonatomic, remove atomic addrs),
     and trimmed of only addrs responsible for 99% of {metric}
     """
-    atomic_map = analysis.load_dict_from_json(
+    atomic_map = helpers.load_dict_from_json(
         f"atomic/fourteen/builder_atomic_maps/builder_atomic_map_{metric}.json"
     )
 
-    atomic_agg = analysis.load_dict_from_json(f"atomic/fourteen/agg/agg_{metric}.json")
+    atomic_agg = helpers.load_dict_from_json(f"atomic/fourteen/agg/agg_{metric}.json")
 
-    nonatomic_map = analysis.load_dict_from_json(
+    nonatomic_map = helpers.load_dict_from_json(
         f"nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_{metric}.json"
     )
-    nonatomic_agg = analysis.load_dict_from_json(
+    nonatomic_agg = helpers.load_dict_from_json(
         f"nonatomic/fourteen/agg/agg_{metric}.json"
     )
 
     # before, atomic_map is {total, arb,...}. after this, atomic is simple
-    atomic_map = analysis.return_atomic_maps_with_only_type(atomic_map, "total")
+    atomic_map = helpers.return_atomic_maps_with_only_type(atomic_map, "total")
 
-    atomic_map, atomic_agg = analysis.prune_known_entities_from_map_and_agg(
+    atomic_map, atomic_agg = helpers.prune_known_entities_from_map_and_agg(
         atomic_map, atomic_agg
     )
 
-    atomic_map, atomic_agg = analysis.get_map_and_agg_in_range(
+    atomic_map, atomic_agg = helpers.get_map_and_agg_in_range(
         atomic_map, atomic_agg, 0.99
     )
     # sort after pruning the known entities
-    atomic_agg = analysis.sort_agg(atomic_agg)
-    atomic_map = analysis.sort_map(atomic_map)
+    atomic_agg = helpers.sort_agg(atomic_agg)
+    atomic_map = helpers.sort_map(atomic_map)
 
-    nonatomic_map, nonatomic_agg = analysis.prune_known_entities_from_map_and_agg(
+    nonatomic_map, nonatomic_agg = helpers.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
-    nonatomic_map, nonatomic_agg = analysis.remove_atomic_from_map_and_agg(
+    nonatomic_map, nonatomic_agg = helpers.remove_atomic_from_map_and_agg(
         nonatomic_map, nonatomic_agg, atomic_agg
     )
-    nonatomic_map, nonatomic_agg = analysis.get_map_and_agg_in_range(
+    nonatomic_map, nonatomic_agg = helpers.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
 
-    nonatomic_agg = analysis.sort_agg(nonatomic_agg)
-    nonatomic_map = analysis.sort_map(nonatomic_map)
+    nonatomic_agg = helpers.sort_agg(nonatomic_agg)
+    nonatomic_map = helpers.sort_map(nonatomic_map)
 
     return [
         atomic_map,
@@ -413,17 +413,17 @@ def dump_data_used(all):
             elif j == 2:
                 mev_domain = "nonatomic"
 
-            analysis.dump_dict_to_json(map, f"data/{type}/{mev_domain}_map_{type}.json")
-            analysis.dump_dict_to_json(agg, f"data/{type}/{mev_domain}_agg_{type}.json")
+            helpers.dump_dict_to_json(map, f"data/{type}/{mev_domain}_map_{type}.json")
+            helpers.dump_dict_to_json(agg, f"data/{type}/{mev_domain}_agg_{type}.json")
 
 
 def load_maps_and_aggs_from_dir(metric):
     path = f"data/{metric}/"
-    atomic_map = analysis.load_dict_from_json(path + f"atomic_map_{metric}.json")
-    nonatomic_map = analysis.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
+    atomic_map = helpers.load_dict_from_json(path + f"atomic_map_{metric}.json")
+    nonatomic_map = helpers.load_dict_from_json(path + f"nonatomic_map_{metric}.json")
 
-    atomic_agg = analysis.load_dict_from_json(path + f"atomic_agg_{metric}.json")
-    nonatomic_agg = analysis.load_dict_from_json(path + f"nonatomic_agg_{metric}.json")
+    atomic_agg = helpers.load_dict_from_json(path + f"atomic_agg_{metric}.json")
+    nonatomic_agg = helpers.load_dict_from_json(path + f"nonatomic_agg_{metric}.json")
 
     return [
         atomic_map,
@@ -525,7 +525,7 @@ def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
 
 def create_html_page():
     all_builders_keys = list(
-        analysis.load_dict_from_json(
+        helpers.load_dict_from_json(
             "atomic/fourteen/builder_atomic_maps/builder_atomic_map_block.json"
         ).keys()
     )
@@ -550,11 +550,6 @@ def create_html_page():
             all_maps_and_aggs_bribe,
         ]
     )
-
-    # all_maps_and_aggs_tx = load_maps_and_aggs_from_dir("tx")
-    # all_maps_and_aggs_vol = load_maps_and_aggs_from_dir("vol")
-    # all_maps_and_aggs_bribe = load_maps_and_aggs_from_dir("bribe")
-    # all_maps_and_aggs_vol_list = load_maps_and_aggs_from_dir("vol_list")
 
     nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_vol[2],

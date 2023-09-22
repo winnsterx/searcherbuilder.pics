@@ -1,4 +1,4 @@
-import analysis
+import helpers
 
 
 # increments the frequency counter of searcher, which can be addr_from/to, for the builder
@@ -101,53 +101,53 @@ def compile_atomic_data(
     builder_atomic_map_gas_bribe,
     builder_atomic_map_vol_list,
 ):
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_block,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_block.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_tx,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_tx.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_profit,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_profit.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_vol,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_vol.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_coin_bribe,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_coin_bribe.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_gas_bribe,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_gas_bribe.json",
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_vol_list,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_vol_list.json",
     )
 
-    agg_block = analysis.aggregate_block_count(builder_atomic_map_block)
-    agg_tx = analysis.create_sorted_agg_from_atomic_map(builder_atomic_map_tx)
-    agg_profit = analysis.create_sorted_agg_from_atomic_map(builder_atomic_map_profit)
-    agg_vol = analysis.create_sorted_agg_from_atomic_map(builder_atomic_map_vol)
-    agg_coin = analysis.create_sorted_agg_from_atomic_map(builder_atomic_map_coin_bribe)
-    agg_gas = analysis.create_sorted_agg_from_atomic_map(builder_atomic_map_gas_bribe)
-    analysis.dump_dict_to_json(agg_block, "atomic/fourteen/agg/agg_block.json")
-    analysis.dump_dict_to_json(agg_tx, "atomic/fourteen/agg/agg_tx.json")
-    analysis.dump_dict_to_json(agg_profit, "atomic/fourteen/agg/agg_profit.json")
-    analysis.dump_dict_to_json(agg_vol, "atomic/fourteen/agg/agg_vol.json")
-    analysis.dump_dict_to_json(agg_coin, "atomic/fourteen/agg/agg_coin.json")
-    analysis.dump_dict_to_json(agg_gas, "atomic/fourteen/agg/agg_gas.json")
+    agg_block = helpers.aggregate_block_count(builder_atomic_map_block)
+    agg_tx = helpers.create_sorted_agg_from_atomic_map(builder_atomic_map_tx)
+    agg_profit = helpers.create_sorted_agg_from_atomic_map(builder_atomic_map_profit)
+    agg_vol = helpers.create_sorted_agg_from_atomic_map(builder_atomic_map_vol)
+    agg_coin = helpers.create_sorted_agg_from_atomic_map(builder_atomic_map_coin_bribe)
+    agg_gas = helpers.create_sorted_agg_from_atomic_map(builder_atomic_map_gas_bribe)
+    helpers.dump_dict_to_json(agg_block, "atomic/fourteen/agg/agg_block.json")
+    helpers.dump_dict_to_json(agg_tx, "atomic/fourteen/agg/agg_tx.json")
+    helpers.dump_dict_to_json(agg_profit, "atomic/fourteen/agg/agg_profit.json")
+    helpers.dump_dict_to_json(agg_vol, "atomic/fourteen/agg/agg_vol.json")
+    helpers.dump_dict_to_json(agg_coin, "atomic/fourteen/agg/agg_coin.json")
+    helpers.dump_dict_to_json(agg_gas, "atomic/fourteen/agg/agg_gas.json")
 
-    builder_atomic_map_bribe, agg_bribe = analysis.combine_gas_and_coin_bribes_in_eth(
+    builder_atomic_map_bribe, agg_bribe = helpers.combine_gas_and_coin_bribes_in_eth(
         builder_atomic_map_gas_bribe, builder_atomic_map_coin_bribe, True
     )
-    analysis.dump_dict_to_json(
+    helpers.dump_dict_to_json(
         builder_atomic_map_bribe,
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_bribe.json",
     )
-    analysis.dump_dict_to_json(agg_bribe, "atomic/fourteen/agg/agg_bribe.json")
+    helpers.dump_dict_to_json(agg_bribe, "atomic/fourteen/agg/agg_bribe.json")

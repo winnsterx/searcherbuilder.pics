@@ -1,16 +1,15 @@
 import os
 from decimal import Decimal
-import pandas as pd
 import json
 import ijson
-import non_mev_contracts
-from collections import defaultdict, Counter
+import labels.non_mev_contracts as non_mev_contracts
+from collections import defaultdict
 from itertools import islice
 import statistics
 import csv
 import re
 import atomic_mev, main_mev
-import builder_addr_map, searcher_addr_map
+import labels.builder_addr_map as builder_addr_map
 
 # FILE METHODS
 

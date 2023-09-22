@@ -1,7 +1,7 @@
 import time
 import subprocess
 import fetch_blocks
-import analysis
+import helpers
 import main_mev
 import chartprep
 import secret_keys
@@ -64,7 +64,7 @@ def fetch_new_blocks(old_blocks, new_start, new_end):
 
 def update_tr_file(new_start, new_end, blocks):
     print("Loading old tr file")
-    old_trs = analysis.load_dict_from_json(TR_FILE)
+    old_trs = helpers.load_dict_from_json(TR_FILE)
     to_fetch = find_to_fetch(old_trs, new_start, new_end)
 
     to_fetch_blocks = {}
@@ -87,7 +87,7 @@ def update_tr_file(new_start, new_end, blocks):
 
 def update_zeromev_file(new_start, new_end):
     print("Loading old zeromev file")
-    old_zeromev = analysis.load_dict_from_json(ZEROMEV_FILE)
+    old_zeromev = helpers.load_dict_from_json(ZEROMEV_FILE)
     to_fetch = find_to_fetch(old_zeromev, new_start, new_end)
 
     new_zeromev = main_mev.fetch_zeromev_blocks(to_fetch)
@@ -108,7 +108,7 @@ def update_block_files(new_start, new_end):
     # new_end = 18035588
     # new_end = new_start + 1000
     print("New start and end block num", new_start, new_end)
-    old_blocks = analysis.load_dict_from_json(BLOCK_FILE)
+    old_blocks = helpers.load_dict_from_json(BLOCK_FILE)
     new_blocks, to_fetch = fetch_new_blocks(old_blocks, new_start, new_end)
 
     missing, updated_blocks = combine_blocks(new_start, new_end, old_blocks, new_blocks)
@@ -119,20 +119,20 @@ def update_block_files(new_start, new_end):
         if len(missing) > 1000:
             return
 
-    analysis.dump_dict_to_json(updated_blocks, BLOCK_FILE_SANS_GASUSED)
+    helpers.dump_dict_to_json(updated_blocks, BLOCK_FILE_SANS_GASUSED)
 
     updated_receipts = fetch_blocks.get_blocks_receipts_by_list(to_fetch)
     updated_blocks = fetch_blocks.add_gas_used_to_blocks(
         updated_blocks, updated_receipts
     )
 
-    analysis.dump_dict_to_json(updated_blocks, BLOCK_FILE)
+    helpers.dump_dict_to_json(updated_blocks, BLOCK_FILE)
 
     updated_trs = update_tr_file(new_start, new_end, updated_blocks)
-    analysis.dump_dict_to_json(updated_trs, TR_FILE)
+    helpers.dump_dict_to_json(updated_trs, TR_FILE)
 
     updated_zeromev_blocks = update_zeromev_file(new_start, new_end)
-    analysis.dump_dict_to_json(updated_zeromev_blocks, ZEROMEV_FILE)
+    helpers.dump_dict_to_json(updated_zeromev_blocks, ZEROMEV_FILE)
 
     return updated_blocks, updated_trs, updated_zeromev_blocks
 

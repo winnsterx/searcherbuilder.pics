@@ -6,8 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from collections import defaultdict
 import atomic_mev, nonatomic_mev
-import builder_addr_map
-import analysis
+import labels.builder_addr_map as builder_addr_map
 
 
 def fetch_zeromev_block(session, url, block_num, zeromev_blocks):
