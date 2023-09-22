@@ -398,18 +398,13 @@ def dump_data_used(all):
     # [block, tx, vol, bribe, vol_list]
     for i in range(0, len(all)):
         if i == 0:
-            type = "block"
-        elif i == 1:
             type = "tx"
-        elif i == 2:
+        elif i == 1:
             type = "vol"
-        elif i == 3:
+        elif i == 2:
             type = "bribe"
-        elif i == 4:
-            type = "vol_list"
         all_maps_and_aggs = all[i]
 
-        # [atomic_map, atomic_agg, nonatomic_map, nonatomic_agg, combined_map, combined_agg]
         for j in range(0, len(all_maps_and_aggs), 2):
             map = all_maps_and_aggs[j]
             agg = all_maps_and_aggs[j + 1]
@@ -417,8 +412,6 @@ def dump_data_used(all):
                 mev_domain = "atomic"
             elif j == 2:
                 mev_domain = "nonatomic"
-            elif j == 4:
-                mev_domain = "combined"
 
             analysis.dump_dict_to_json(map, f"data/{type}/{mev_domain}_map_{type}.json")
             analysis.dump_dict_to_json(agg, f"data/{type}/{mev_domain}_agg_{type}.json")
@@ -643,37 +636,27 @@ def create_html_page():
     )
     head = head.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    nonatomic_intro_html = """
-
-    <div style='background-color: #d7edf4; padding: 2rem; margin:2rem;'>
-        <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage.<br><br>
-        Using <a href="data.zeromev.org/docs/">Zeromev API</a>, we collect all directional swaps and identify a non-atomic MEV transaction using these heuristics. We filter out transactions sent to known non-MEV smart contracts. Examining the <strong>volume</strong> and <strong>total bribe</strong> that non-atomic searchers sent to builders, we can infer potentially exclusive searcher-builder relationships.
-    </div>
-"""
-
     nonatomic_intro = """
-    **Non-atomic MEV** refers to primarily CEX-DEX arbitrage.
-
-    Using [Zeromev API](data.zeromev.org/docs/), we collect all directional swaps and identify a non-atomic MEV transaction using these heuristics. We filter out transactions sent to known non-MEV smart contracts. Examining the **volume** and **total bribe** that non-atomic searchers sent to builders, we can infer potentially exclusive searcher-builder relationships.     
+    <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
+        <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage.<br><br>
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcher_database/blob/d334d5f9215ea2d479ac11e79f25be0cb5842aed/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcher_database/blob/main/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>volume</strong> and <strong>total bribe</strong> that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+    </div>
     """
+
     atomic_intro = """
-    The page aims to highlight potentially exclusive relationships between **atomic MEV** searchers and builders in Ethereum. Atomic MEV searchers refers to MEV searchers executing DEX-DEX arbitrage, sandwiching, and liquidation. 
-
-    Using [Zeromev API](data.zeromev.org/docs/), we identify atomic MEV transactions. We collect the `address_to` field of these transactions and filter out known non-MEV smart contracts. Examining the **number of transactions** and **total bribe (coinbase transfers + priority gas fees)** that non-atomic searchers sent to different builders over the last fourteen days, we can infer potentially exclusive searcher-builder relationships. For non-atomic MEV, select the other tab above.
+    <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
+        <strong>Atomic MEV</strong> refers to <strong>DEX-DEX arbitrage, sandwiching, and liquidation.</strong><br><br>
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, front-run, back-run, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcher_database/blob/main/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>number of transactions</strong> and <strong>total bribe</strong> that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+    </div>
     """
+
     view = dp.Blocks(
         dp.Page(
             title="Non-atomic MEV",
             blocks=[
                 title,
                 head,
-                nonatomic_intro_html,
-                # dp.Group(
-                #     dp.Text(
-                #         nonatomic_intro, name="nonatomic-intro", label="nonatomicintro"
-                #     ),
-                #     columns=1,
-                # ),
+                nonatomic_intro,
                 nonatomic_bar,
                 nonatomic_notable_bar,
                 nonatomic_searcher_pie_vol,
@@ -684,6 +667,7 @@ def create_html_page():
             blocks=[
                 title,
                 head,
+                atomic_intro,
                 atomic_bar,
                 atomic_notable_bar,
                 atomic_searcher_pie_tx,
@@ -746,10 +730,10 @@ def create_html_page():
             margin-bottom: 1.5rem;
         }
 
-        # div.justify-start {
-        #     margin-top: 1rem;
-        #     margin-bottom: 1rem;
-        # }
+        div.justify-start {
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
                 
         </style>
     """
