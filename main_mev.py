@@ -93,6 +93,7 @@ def analyze_tx(
     mev_type = tx["mev_type"]
     if mev_type == "sandwich":
         return
+
     elif mev_type == "swap":
         nonatomic_mev.analyze_tx(
             block_number,

@@ -76,7 +76,7 @@ extraData_builder_mapping = {
     "blocknative": "Blocknative",
     "illuminate": "Flashbots",
     "beelder": "Beelder",
-    "bloxroute": "Bloxroute",
+    "bloxroute": "bloXroute",
     "buildai": "BuildAI",
     "f1b": "f1b",
     "eden": "Eden",
@@ -91,7 +91,6 @@ extraData_builder_mapping = {
     "uwu": "uwu.builders",
     "haz": "I can haz block?",
     "smithbot": "smithbot",
-    # "linux": "vanilla_builders",
-    # "geth": "vanilla_builders",
-    # "nethermind": "vanilla_builders",
+    "geth": "vanilla geth",
+    "nethermind": "vanilla nethermind",
 }

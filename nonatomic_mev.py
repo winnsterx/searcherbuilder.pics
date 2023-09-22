@@ -37,10 +37,15 @@ def analyze_tx(
     after_bribe,
     tob_bribe,
 ):
+    if swap == None:
+        return
     tx_index = swap["tx_index"]
     tx_volume = swap.get("user_swap_volume_usd", 0) or 0
-    addr_to = swap["address_to"].lower()
-    addr_from = swap["address_from"].lower()
+
+    addr_to = swap.get("address_to", "").lower()
+    addr_from = swap.get("address_to", "").lower()
+    if addr_to == "" or addr_from == "":
+        return
 
     if full_tx["hash"] in transfer_map.keys():
         builder_nonatomic_map_tx[builder][addr_to] += 1
@@ -48,9 +53,13 @@ def analyze_tx(
         builder_nonatomic_map_vol_list[builder][addr_to].append(tx_volume)
 
         # the coin bribe may come from a different addr. record who its actually coming from
-        builder_nonatomic_map_coin_bribe[builder][
-            transfer_map[full_tx["hash"]]["from"]
-        ] += transfer_map[full_tx["hash"]]["value"]
+        # builder_nonatomic_map_coin_bribe[builder][
+        #     transfer_map[full_tx["hash"]]["from"]
+        # ] += transfer_map[full_tx["hash"]]["value"]
+        # actually it doesnt actually matter where this coinbase is paid from, but rather which contract is initiating that strategy
+        builder_nonatomic_map_coin_bribe[builder][addr_to] += transfer_map[
+            full_tx["hash"]
+        ]["value"]
 
         tx_priority_fee = (
             full_tx["gasUsed"] * full_tx["gasPrice"]
@@ -59,9 +68,7 @@ def analyze_tx(
 
         builder_nonatomic_map_gas_bribe[builder][addr_to] += tx_priority_fee
 
-        coinbase_bribe[transfer_map[full_tx["hash"]]["from"]][builder].append(
-            transfer_map[full_tx["hash"]]["value"]
-        )
+        coinbase_bribe[addr_to][builder].append(transfer_map[full_tx["hash"]]["value"])
 
         if addr_to not in addrs_counted_in_block:
             builder_nonatomic_map_block[builder][addr_to] += 1

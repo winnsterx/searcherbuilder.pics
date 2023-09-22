@@ -3,7 +3,7 @@ from decimal import Decimal
 import pandas as pd
 import json
 import ijson
-import constants
+import non_mev_contracts
 from collections import defaultdict, Counter
 from itertools import islice
 import statistics
@@ -134,7 +134,7 @@ def slice_dict(d, n):
 def remove_known_entities_from_agg(agg):
     res = {}
     for addr, count in agg.items():
-        if addr not in constants.ALL_LABELED_CONTRACTS:
+        if addr not in non_mev_contracts.ALL_LABELED_CONTRACTS:
             res[addr] = count
     return res
 
@@ -265,7 +265,7 @@ def prune_known_entities_from_map_and_agg(map, agg):
 def prune_known_entities_from_agg(agg):
     res = {}
     for addr, count in agg.items():
-        if addr not in constants.ALL_LABELED_CONTRACTS:
+        if addr not in non_mev_contracts.ALL_LABELED_CONTRACTS:
             res[addr] = count
     return res
 
@@ -274,7 +274,7 @@ def prune_known_entities_from_simple_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for addr, count in searchers.items():
-            if addr not in constants.ALL_LABELED_CONTRACTS:
+            if addr not in non_mev_contracts.ALL_LABELED_CONTRACTS:
                 res[builder][addr] = count
     return res
 
@@ -283,7 +283,7 @@ def prune_known_entities_from_atomic_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for builder, searchers in map.items():
         for addr, stats in searchers.items():
-            if addr not in constants.ALL_LABELED_CONTRACTS:
+            if addr not in non_mev_contracts.ALL_LABELED_CONTRACTS:
                 res[builder][addr] = stats["total"]
     return res
 
@@ -291,7 +291,7 @@ def prune_known_entities_from_atomic_map(map):
 def prune_known_entities_from_searcher_builder_map(map):
     res = defaultdict(lambda: defaultdict(int))
     for searcher, builders in map.items():
-        if searcher not in constants.ALL_LABELED_CONTRACTS:
+        if searcher not in non_mev_contracts.ALL_LABELED_CONTRACTS:
             res[searcher] = builders
 
     return res
