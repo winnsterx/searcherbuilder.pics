@@ -10,6 +10,7 @@ import csv
 import re
 import atomic_mev, main_mev
 import labels.builder_addr_map as builder_addr_map
+import attributes
 
 # FILE METHODS
 
@@ -696,5 +697,27 @@ def create_searcher_builder_number_of_txs_map(map_vol_list):
     return searcher_builder_map
 
 
-if __name__ == "__main__":
-    covert_csv_to_json("orderflow.csv")
+def get_builder_colors_map(list_of_builders):
+    colors = attributes.color_list
+
+    builder_color_map = {}
+    for builder in builder_addr_map.extraData_builder_mapping.keys():
+        color = attributes.color_list[i]
+        builder_color_map[builder] = "rgb" + str(color).replace("[", "(").replace(
+            "]", ")"
+        )
+    for idx, builder in enumerate(list_of_builders):
+        if builder in builder_color_map:
+            continue
+        color = colors[
+            idx % len(colors)
+        ]  # Wrap around if there are more builders than colors
+        builder_color_map[builder] = "rgb" + str(color).replace("[", "(").replace(
+            "]", ")"
+        )
+
+    return builder_color_map
+
+
+# if __name__ == "__main__":
+#

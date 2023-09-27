@@ -22,9 +22,12 @@ def abbreviate_label(label, short=False):
                 res += " (" + label[:9] + ")"
             return res
         else:
-            return label[:15] + "..."
+            return label[:15] + ".."
     else:
-        return label
+        if len(label) < 15:
+            return label
+        else:
+            return label[:15] + ".."
 
 
 def convert_metric_for_title(metric):
@@ -42,7 +45,18 @@ def get_builder_colors_map(list_of_builders):
     colors = attributes.color_list
 
     builder_color_map = {}
+    i = 0
+    for builder in builder_addr_map.extraData_builder_mapping.keys():
+        color = colors[i]
+        builder_color_map[builder] = "rgb" + str(color).replace("[", "(").replace(
+            "]", ")"
+        )
+
+        i += 1
+
     for idx, builder in enumerate(list_of_builders):
+        if builder in builder_addr_map.extraData_builder_mapping.keys():
+            continue
         color = colors[
             idx % len(colors)
         ]  # Wrap around if there are more builders than colors
@@ -66,6 +80,12 @@ def create_notable_searcher_builder_percentage_bar_chart(
         builder_market_share,
         highlight_relationship,
     ) = helpers.find_notable_searcher_builder_relationships(map)
+
+    integrated = {}
+    for searcher, builders in notable.items():
+        for builder, val in builders.items():
+            if (searcher, builder) in highlight_relationship:
+                integrated.setdefault(searcher, {})[builder] = val
 
     # builder_num = len(builder_market_share.keys())
     # for builder, share in builder_market_share.items():
@@ -153,7 +173,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
                 hovertemplate=(
                     "<b>Searcher:</b> %{y}<br>"
                     "<b>Builder:</b> %{customdata[0]}<br>"
-                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    f"<b>Total %{{customdata[2]}} sent to builder:</b> %{{customdata[1]}} {unit}<br>"
                     "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
                 ),
                 marker=dict(color="lightgray", line=dict(width=1)),
@@ -175,7 +195,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
                 hovertemplate=(
                     "<b>Searcher:</b> %{y}<br>"
                     "<b>Builder:</b> %{customdata[0]}<br>"
-                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    f"<b>Total %{{customdata[2]}} sent to builder:</b> %{{customdata[1]}} {unit}<br>"
                     "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
                 ),
                 name=abbreviate_label(builder, True),
@@ -186,7 +206,10 @@ def create_notable_searcher_builder_percentage_bar_chart(
         )
 
     title_layout = {
-        "text": span.format(mev_domain.lower(), convert_metric_for_title(metric)),
+        "text": span.format(
+            mev_domain.lower(),
+            convert_metric_for_title(metric).lower().replace("(eth)", "(ETH)"),
+        ),
         "y": 0.9,
         "x": 0.5,
         "xanchor": "center",
@@ -253,7 +276,7 @@ def create_searcher_builder_percentage_bar_chart(
                 hovertemplate=(
                     "<b>Searcher:</b> %{y}<br>"
                     "<b>Builder:</b> %{customdata[0]}<br>"
-                    "<b>Total %{customdata[2]} sent to builder:</b> %{customdata[1]} ETH<br>"
+                    f"<b>Total %{{customdata[2]}} sent to builder:</b> %{{customdata[1]}} {unit}<br>"
                     "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
                 ),
                 marker=dict(color=builder_color_map[builder], line=dict(width=1)),
@@ -551,19 +574,18 @@ def create_html_page():
         ]
     )
 
-    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
-        all_maps_and_aggs_vol[2],
-        all_maps_and_aggs_vol[3],
-        "vol",
-        "Non-atomic",
-        builder_color_map,
-    )
-
     atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_tx[0],
         all_maps_and_aggs_tx[1],
         "tx",
         "Atomic",
+        builder_color_map,
+    )
+    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
+        all_maps_and_aggs_vol[2],
+        all_maps_and_aggs_vol[3],
+        "vol",
+        "Non-atomic",
         builder_color_map,
     )
 
@@ -624,7 +646,7 @@ def create_html_page():
         "<div><div><div style ='float:left;color:#0F1419;font-size:18px'>Based on transactions from last 14 days. Last updated {}.</div>"
         + '<div style ="float:right;font-size:18px;color:#0F1419">View <a href="https://github.com/winnsterx/searcher_database/tree/main/data">raw data</a> </div></div>'
         + '<div><div style ="float:left;font-size:18px;color:#0F1419;clear: left">Built by '
-        + '<a href="https://twitter.com/winnsterx">winnsterx</a> at <a href="https://twitter.com/BitwiseInvest">Bitwise</a>. Inspired by '
+        + '<a href="https://twitter.com/winnsterx">Winnie</a> at <a href="https://twitter.com/BitwiseInvest">Bitwise</a>. Inspired by '
         + '<a href="https://mevboost.pics">mevboost.pics</a>.</div>'
         + '<div style ="float:right;font-size:18px;color:#0F1419">View Source on <a href="https://github.com/winnsterx/searcher_database">Github</a></div></div></div><br/><br/>'
         + "\n"
@@ -634,14 +656,14 @@ def create_html_page():
     nonatomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage.<br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcher_database/blob/d334d5f9215ea2d479ac11e79f25be0cb5842aed/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcher_database/blob/main/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>volume</strong> and <strong>total bribe</strong> that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcher_database/blob/d334d5f9215ea2d479ac11e79f25be0cb5842aed/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>volume</strong> and <strong>total bribe</strong> that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
     </div>
     """
 
     atomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Atomic MEV</strong> refers to <strong>DEX-DEX arbitrage, sandwiching, and liquidation.</strong><br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, front-run, back-run, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcher_database/blob/main/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>number of transactions</strong> and <strong>total bribe</strong> that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>number of transactions</strong> and <strong>total bribe</strong> that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
     </div>
     """
 
@@ -693,7 +715,7 @@ def create_html_page():
         a.pt-1 {
             position: sticky;
             top:0%;
-            font-size: 1.4rem;
+            font-size: 1.6rem;
             padding-top: 1.2rem !important;
             padding-bottom: 1.2rem !important;
         }
@@ -705,6 +727,10 @@ def create_html_page():
         }
         .py-5.px-4 {
             background: white;
+        }
+
+        main.w-full {
+            padding-bottom: 0; !important;
         }
         main div.px-4 {
             background: #eee;

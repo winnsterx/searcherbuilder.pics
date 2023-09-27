@@ -37,6 +37,13 @@ def analyze_tx(
     after_bribe,
     tob_bribe,
 ):
+    """
+    For any uni-directional swaps detected by zeromev, we classify it as a CEX-DEX arbitrage if it meets one of the following criteria:
+    1. swap contains a coinbase transfer to the builder/fee recipient of the block
+    2. swap is followed by a direct transfer to the builder/fee recipient of the block
+    3. swap is within the top 10% of the block
+    """
+
     if swap == None:
         return
     tx_index = swap["tx_index"]
@@ -52,11 +59,6 @@ def analyze_tx(
         builder_nonatomic_map_vol[builder][addr_to] += tx_volume
         builder_nonatomic_map_vol_list[builder][addr_to].append(tx_volume)
 
-        # the coin bribe may come from a different addr. record who its actually coming from
-        # builder_nonatomic_map_coin_bribe[builder][
-        #     transfer_map[full_tx["hash"]]["from"]
-        # ] += transfer_map[full_tx["hash"]]["value"]
-        # actually it doesnt actually matter where this coinbase is paid from, but rather which contract is initiating that strategy
         builder_nonatomic_map_coin_bribe[builder][addr_to] += transfer_map[
             full_tx["hash"]
         ]["value"]
@@ -74,7 +76,6 @@ def analyze_tx(
             builder_nonatomic_map_block[builder][addr_to] += 1
             addrs_counted_in_block.add(addr_to)
 
-    # if followed by a direct transfer to builder
     elif followed_by_transfer_to_builder(fee_recipient, full_tx, full_next_tx) == True:
         # mev bot collected here will be an EOA
         builder_nonatomic_map_tx[builder][addr_from] += 1
