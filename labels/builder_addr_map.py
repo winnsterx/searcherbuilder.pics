@@ -69,7 +69,7 @@ BUILDER_ADDR_MAP = {
 }
 
 extraData_builder_mapping = {
-    "rsyncbuilder": "rsync-builder",
+    "rsync": "rsync-builder",
     "beaverbuild": "beaverbuild",
     "titan": "Titan Builder",
     "illuminate": "Flashbots",

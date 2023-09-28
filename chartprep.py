@@ -1,7 +1,7 @@
 import datapane as dp
 import plotly.graph_objects as go
 from datetime import datetime
-
+import seaborn as sns
 import helpers
 import secret_keys
 import labels.searcher_addr_map as searcher_addr_map, labels.builder_addr_map as builder_addr_map
@@ -34,35 +34,42 @@ def convert_metric_for_title(metric):
     if metric == "tx":
         return "Transaction Count"
     elif metric == "vol":
-        return "Volume (ETH)"
+        return "Volume (USD)"
     elif metric == "bribe":
         return "Bribes (Coinbase Transfers + Priority Fees, in ETH)"
     elif metric == "block":
         return "Block Count"
 
 
+def get_unit_from_metric(metric):
+    if metric == "tx":
+        return "txs"
+    elif metric == "vol":
+        return "USD"
+    elif metric == "bribe":
+        return "ETH"
+
+
 def get_builder_colors_map(list_of_builders):
+    # colors = sns.color_palette("Paired", len(list_of_builders)).as_hex()
     colors = attributes.color_list
 
     builder_color_map = {}
     i = 0
-    for builder in builder_addr_map.extraData_builder_mapping.keys():
-        color = colors[i]
-        builder_color_map[builder] = "rgb" + str(color).replace("[", "(").replace(
-            "]", ")"
-        )
 
+    for alias in builder_addr_map.extraData_builder_mapping.values():
+        builder_color_map[alias] = colors[i]
+        print(alias, colors[i])
         i += 1
 
     for idx, builder in enumerate(list_of_builders):
-        if builder in builder_addr_map.extraData_builder_mapping.keys():
+        if builder in builder_addr_map.extraData_builder_mapping.values():
             continue
         color = colors[
             idx % len(colors)
         ]  # Wrap around if there are more builders than colors
-        builder_color_map[builder] = "rgb" + str(color).replace("[", "(").replace(
-            "]", ")"
-        )
+        builder_color_map[builder] = color
+    helpers.dump_dict_to_json(builder_color_map, f"color_map.json")
 
     return builder_color_map
 
@@ -87,10 +94,6 @@ def create_notable_searcher_builder_percentage_bar_chart(
             if (searcher, builder) in highlight_relationship:
                 integrated.setdefault(searcher, {})[builder] = val
 
-    # builder_num = len(builder_market_share.keys())
-    # for builder, share in builder_market_share.items():
-    #     builder_market_share[builder] = 100 / builder_num
-
     span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Disproportionate Orderflows<br /><span style="font-size: 15px;">Filtering out relationships in which a {} searcher sent a <br />disproportionate amount of orderflow to a builder, ranked by {}</span></span>'
 
     for builder, searchers in map.items():
@@ -101,7 +104,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
         y_regular = []
         customdata_highlighted = []
         customdata_regular = []
-        unit = "ETH" if metric != "tx" else "txs"
+        unit = get_unit_from_metric(metric)
 
         for searcher, builders_percent in notable.items():
             # for searcher, _ in agg.items():
@@ -208,7 +211,7 @@ def create_notable_searcher_builder_percentage_bar_chart(
     title_layout = {
         "text": span.format(
             mev_domain.lower(),
-            convert_metric_for_title(metric).lower().replace("(eth)", "(ETH)"),
+            convert_metric_for_title(metric).lower().replace("(usd)", "(USD)"),
         ),
         "y": 0.9,
         "x": 0.5,
@@ -244,7 +247,7 @@ def create_searcher_builder_percentage_bar_chart(
         builder_market_share[builder] = sum(searchers.values())
 
     total_count = sum(builder_market_share.values())
-    unit = "ETH" if metric != "tx" else "txs"
+    unit = get_unit_from_metric(metric)
     for builder, searchers in map.items():
         x = []
         y = [abbreviate_label(s, True) for s in list(top_searchers.keys())]
@@ -299,10 +302,10 @@ def create_searcher_builder_percentage_bar_chart(
     fig.update_layout(
         title=title_layout,
         xaxis=dict(ticksuffix="%", title=generate_xaxis_title(metric), range=[0, 100]),
-        yaxis_title="",
+        yaxis_title="Searcher Addresses",
         barmode="stack",
         legend={"traceorder": "normal"},
-        margin={"t": 120},  # what gives the spacing between title and plot
+        margin={"t": 120, "l": 10},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
         height=700,
     )
@@ -337,7 +340,7 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
 
     searchers = [abbreviate_label(s) for s in list(agg.keys())]
     counts = list(agg.values())
-    unit = "ETH" if metric != "tx" else "txs"
+    unit = get_unit_from_metric(metric)
     fig = go.Figure(
         data=go.Pie(
             labels=searchers,
@@ -478,20 +481,22 @@ def generate_xaxis_title(metric):
         return "Percentage of Transactions"
 
 
-def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
-    # Combine the figures. Set the second one as invisible initially.
-    # Determine the max number of traces
-    max_traces = max(len(fig_prime.data), len(fig_bribe.data))
+def create_toggle(fig_prime, fig_bribe, fig_sec, metric, metric_sec, mev_domain):
+    # Combine the figures. Set the other ones as invisible initially.
+    max_traces = max(len(fig_prime.data), len(fig_bribe.data), len(fig_sec.data))
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
-
-    # Add dummy traces as necessary to match the number of traces
+    # Add dummy traces to each figure to match the maximum number of traces
     fig_prime = add_dummy_traces_to_match(fig_prime, max_traces)
     fig_bribe = add_dummy_traces_to_match(fig_bribe, max_traces)
+    fig_sec = add_dummy_traces_to_match(fig_sec, max_traces)
 
     # Combine and set the toggle logic
     combined_fig = fig_prime
     for trace in fig_bribe.data:
+        trace.visible = False
+        combined_fig.add_trace(trace)
+
+    for trace in fig_sec.data:
         trace.visible = False
         combined_fig.add_trace(trace)
 
@@ -511,7 +516,11 @@ def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
                         "label": convert_metric_for_title(metric),
                         "method": "update",
                         "args": [
-                            {"visible": [True] * max_traces + [False] * max_traces},
+                            {
+                                "visible": [True] * max_traces
+                                + [False] * max_traces
+                                + [False] * max_traces
+                            },
                             {
                                 "title": {
                                     "text": generate_title(metric, mev_domain),
@@ -528,14 +537,41 @@ def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
                         "label": "Bribes (ETH)",
                         "method": "update",
                         "args": [
-                            {"visible": [False] * max_traces + [True] * max_traces},
+                            {
+                                "visible": [False] * max_traces
+                                + [True] * max_traces
+                                + [False] * max_traces
+                            },
                             {
                                 "title": {
-                                    "text": generate_title(
-                                        "bribe", mev_domain
-                                    )  # Assuming a different metric name for bribes
+                                    "text": generate_title("bribe", mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
                                 },
                                 "xaxis.title.text": generate_xaxis_title("bribe"),
+                            },
+                        ],
+                    },
+                    {
+                        "label": convert_metric_for_title(metric_sec),
+                        "method": "update",
+                        "args": [
+                            {
+                                "visible": [False] * max_traces
+                                + [False] * max_traces
+                                + [True] * max_traces
+                            },
+                            {
+                                "title": {
+                                    "text": generate_title(metric_sec, mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
+                                },
+                                "xaxis.title.text": generate_xaxis_title(metric_sec),
                             },
                         ],
                     },
@@ -549,7 +585,7 @@ def create_toggle(fig_prime, fig_bribe, metric, mev_domain):
 def create_html_page():
     all_builders_keys = list(
         helpers.load_dict_from_json(
-            "atomic/fourteen/builder_atomic_maps/builder_atomic_map_block.json"
+            "nonatomic/fourteen/builder_nonatomic_maps/builder_nonatomic_map_block.json"
         ).keys()
     )
 
@@ -605,8 +641,21 @@ def create_html_page():
         builder_color_map,
     )
 
+    nonatomic_tx_bar = create_searcher_builder_percentage_bar_chart(
+        all_maps_and_aggs_tx[2],
+        all_maps_and_aggs_tx[3],
+        "Non-atomic",
+        "tx",
+        builder_color_map,
+    )
+
     nonatomic_bar = create_toggle(
-        nonatomic_vol_bar, nonatomic_bribe_bar, "vol", "Non-atomic"
+        nonatomic_vol_bar,
+        nonatomic_bribe_bar,
+        nonatomic_tx_bar,
+        "vol",
+        "tx",
+        "Non-atomic",
     )
 
     atomic_tx_bar = create_searcher_builder_percentage_bar_chart(
@@ -625,7 +674,17 @@ def create_html_page():
         builder_color_map,
     )
 
-    atomic_bar = create_toggle(atomic_tx_bar, atomic_bribe_bar, "tx", "Atomic")
+    atomic_vol_bar = create_searcher_builder_percentage_bar_chart(
+        all_maps_and_aggs_vol[0],
+        all_maps_and_aggs_vol[1],
+        "Atomic",
+        "vol",
+        builder_color_map,
+    )
+
+    atomic_bar = create_toggle(
+        atomic_tx_bar, atomic_bribe_bar, atomic_vol_bar, "tx", "vol", "Atomic"
+    )
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(
         all_maps_and_aggs_tx[1],
@@ -655,15 +714,15 @@ def create_html_page():
 
     nonatomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
-        <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage.<br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcher_database/blob/d334d5f9215ea2d479ac11e79f25be0cb5842aed/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>volume</strong> and <strong>total bribe</strong> that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+        <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage (& minimally, cross-chain arbitrage).<br><br>
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the orderflow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV.
     </div>
     """
 
     atomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Atomic MEV</strong> refers to <strong>DEX-DEX arbitrage, sandwiching, and liquidation.</strong><br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the <strong>number of transactions</strong> and <strong>total bribe</strong> that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the orderflow that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>transaction count</strong> and <strong>bribe</strong> as the most reliable metric for atomic MEV.
     </div>
     """
 
