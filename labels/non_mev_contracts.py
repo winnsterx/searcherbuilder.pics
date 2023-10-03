@@ -22,7 +22,6 @@ def get_trending_contracts():
     return TRENDING_CONTRACTS
 
 
-get_trending_contracts()
 WASH_TRADE_BOTS = {
     "WASH_TRADING_BOT_1": "0xa92cccba6a79685c4189844cb1c126806b034111",
     "WASH_TRADING_BOT_2": "0x1124E98C355B4893e1E6903C65DD0EA6Ee7d076B",
