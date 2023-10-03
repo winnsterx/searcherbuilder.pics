@@ -69,7 +69,6 @@ def get_builder_colors_map(list_of_builders):
             idx % len(colors)
         ]  # Wrap around if there are more builders than colors
         builder_color_map[builder] = color
-    helpers.dump_dict_to_json(builder_color_map, f"color_map.json")
 
     return builder_color_map
 

@@ -1,8 +1,28 @@
+import requests
+import re
+
 # combine all the values in the below dictionaries into a set
 # so that i can use the set to check if an addr exists within these dictionaries
 # and if it does, then i can just return the key
 
 
+def replace_upper_non_alnum(s):
+    s = re.sub(r"[^a-zA-Z0-9]+", "_", s)
+    return s.upper()
+
+
+def get_trending_contracts():
+    r = requests.get("https://trending-contracts-api.onrender.com/ethereum_tc/month")
+    r = r.json()
+    TRENDING_CONTRACTS = {}
+    for contract in r:
+        TRENDING_CONTRACTS[replace_upper_non_alnum(contract["name"])] = contract[
+            "contract"
+        ].lower()
+    return TRENDING_CONTRACTS
+
+
+get_trending_contracts()
 WASH_TRADE_BOTS = {
     "WASH_TRADING_BOT_1": "0xa92cccba6a79685c4189844cb1c126806b034111",
     "WASH_TRADING_BOT_2": "0x1124E98C355B4893e1E6903C65DD0EA6Ee7d076B",
@@ -14845,4 +14865,5 @@ ALL_LABELED_CONTRACTS = (
     | set(TELEGRAM_BOTS.values())
     | set(LABELED_CONTRACTS.values())
     | set(ORDERFLOW_LABELS.values())
+    | set(get_trending_contracts().values())
 )
