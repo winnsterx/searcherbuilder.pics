@@ -53,17 +53,20 @@ def get_unit_from_metric(metric):
 def get_builder_colors_map(list_of_builders):
     # colors = sns.color_palette("Paired", len(list_of_builders)).as_hex()
     colors = attributes.color_list
+    top_builder_colors = attributes.top_color_list
 
     builder_color_map = {}
     i = 0
 
     for alias in builder_addr_map.extraData_builder_mapping.values():
-        builder_color_map[alias] = colors[i]
-        print(alias, colors[i])
+        if i > 5:
+            break
+        builder_color_map[alias] = top_builder_colors[i]
+
         i += 1
 
     for idx, builder in enumerate(list_of_builders):
-        if builder in builder_addr_map.extraData_builder_mapping.values():
+        if builder_color_map.get(builder) != None:
             continue
         color = colors[
             idx % len(colors)

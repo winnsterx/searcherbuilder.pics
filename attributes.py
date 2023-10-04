@@ -1,3 +1,15 @@
+top_color_list = [
+    "#fcaa6f",
+    "#6eb6c4",
+    "#f78181",
+    "#84c46e",
+    "#facc69",
+    "#a4a8f5",
+    "#d7a4f5",
+    "#bf84b6",
+    "#b37475",
+]
+
 color_list = [
     "#a6cee3",
     "#1f78b4",
