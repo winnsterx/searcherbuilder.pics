@@ -76,166 +76,6 @@ def get_builder_colors_map(list_of_builders):
     return builder_color_map
 
 
-def create_notable_searcher_builder_percentage_bar_chart(
-    map,
-    agg,
-    metric,
-    mev_domain,
-    builder_color_map,
-):
-    fig = go.Figure()
-    (
-        notable,
-        builder_market_share,
-        highlight_relationship,
-    ) = helpers.find_notable_searcher_builder_relationships(map)
-
-    integrated = {}
-    for searcher, builders in notable.items():
-        for builder, val in builders.items():
-            if (searcher, builder) in highlight_relationship:
-                integrated.setdefault(searcher, {})[builder] = val
-
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">Disproportionate Orderflows<br /><span style="font-size: 15px;">Filtering out relationships in which a {} searcher sent a <br />disproportionate amount of orderflow to a builder, ranked by {}</span></span>'
-
-    for builder, searchers in map.items():
-        # Separate data for highlighted and non-highlighted bars
-        x_highlighted = []
-        y_highlighted = []
-        x_regular = []
-        y_regular = []
-        customdata_highlighted = []
-        customdata_regular = []
-        unit = get_unit_from_metric(metric)
-
-        for searcher, builders_percent in notable.items():
-            # for searcher, _ in agg.items():
-            #     if searcher not in notable:
-            #         continue
-
-            #     builders_percent = notable.get(searcher, {})
-
-            if (
-                searcher,
-                builder,
-            ) in highlight_relationship:
-                y_highlighted.append(searcher)
-                x_highlighted.append(builders_percent.get(builder, 0))
-                y_regular.append(searcher)
-                x_regular.append(0)
-
-                customdata_highlighted.append(
-                    (
-                        builder,
-                        helpers.humanize_number(searchers.get(searcher, 0)),
-                        metric,
-                    )
-                )
-                customdata_regular.append(
-                    (
-                        builder,
-                        0,
-                        metric,
-                    )
-                )
-
-            else:
-                y_regular.append(searcher)
-                x_regular.append(builders_percent.get(builder, 0))
-                y_highlighted.append(searcher)
-                x_highlighted.append(0)
-
-                customdata_regular.append(
-                    (
-                        builder,
-                        helpers.humanize_number(searchers.get(searcher, 0)),
-                        metric,
-                    )
-                )
-                customdata_highlighted.append(
-                    (
-                        builder,
-                        0,
-                        metric,
-                    )
-                )
-
-        y_highlighted.insert(0, "All Searchers")
-        x_highlighted.insert(0, builder_market_share[builder])
-        customdata_highlighted.insert(
-            0,
-            (builder, helpers.humanize_number(sum(searchers.values())), metric),
-        )
-
-        # Trace for non-highlighted bars
-        fig.add_trace(
-            go.Bar(
-                y=[abbreviate_label(s, True) for s in y_regular[::-1]],
-                x=x_regular[::-1],
-                name=abbreviate_label(builder, True),
-                orientation="h",
-                customdata=customdata_regular[::-1],  # Your additional hover info
-                hovertemplate=(
-                    "<b>Searcher:</b> %{y}<br>"
-                    "<b>Builder:</b> %{customdata[0]}<br>"
-                    f"<b>Total %{{customdata[2]}} sent to builder:</b> %{{customdata[1]}} {unit}<br>"
-                    "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
-                ),
-                marker=dict(color="lightgray", line=dict(width=1)),
-                showlegend=False,  # Don't show this in legend
-                legendgroup=builder,  # Use same legendgroup identifier as before
-            )
-        )
-
-        # Trace for highlighted bars
-        fig.add_trace(
-            go.Bar(
-                y=[abbreviate_label(s, True) for s in y_highlighted[::-1]],
-                x=x_highlighted[::-1],
-                text=[
-                    str(data[1]) + " " + unit for data in customdata_highlighted[::-1]
-                ],
-                textposition="inside",
-                customdata=customdata_highlighted[::-1],  # Your additional hover info
-                hovertemplate=(
-                    "<b>Searcher:</b> %{y}<br>"
-                    "<b>Builder:</b> %{customdata[0]}<br>"
-                    f"<b>Total %{{customdata[2]}} sent to builder:</b> %{{customdata[1]}} {unit}<br>"
-                    "<b>Percentage:</b> %{x:.2r}%<extra></extra>"
-                ),
-                name=abbreviate_label(builder, True),
-                orientation="h",
-                marker=dict(color=builder_color_map[builder], line=dict(width=1)),
-                legendgroup=builder,
-            )
-        )
-
-    title_layout = {
-        "text": span.format(
-            mev_domain.lower(),
-            convert_metric_for_title(metric).lower().replace("(usd)", "(USD)"),
-        ),
-        "y": 0.9,
-        "x": 0.5,
-        "xanchor": "center",
-        "yanchor": "top",
-    }
-
-    fig.update_layout(
-        title=title_layout,
-        xaxis=dict(ticksuffix="%", title=generate_xaxis_title(metric), range=[0, 100]),
-        yaxis_title="",
-        barmode="stack",
-        legend={"traceorder": "normal"},
-        margin={"t": 150},  # what gives the spacing between title and plot
-        font=dict(family="Courier New, monospace", color="black"),
-        autosize=False,
-        height=700,
-    )
-
-    return fig
-
-
 def create_searcher_builder_percentage_bar_chart(
     map, agg, mev_domain, metric, builder_color_map
 ):
@@ -384,9 +224,9 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     nonatomic_map, nonatomic_agg = helpers.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
-    # nonatomic_map, nonatomic_agg = helpers.remove_atomic_from_map_and_agg(
-    #     nonatomic_map, nonatomic_agg, atomic_agg
-    # )
+    nonatomic_map, nonatomic_agg = helpers.remove_atomic_from_map_and_agg(
+        nonatomic_map, nonatomic_agg, atomic_agg
+    )
     nonatomic_map, nonatomic_agg = helpers.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
@@ -681,21 +521,6 @@ def create_html_page():
         ]
     )
 
-    # atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
-    #     all_maps_and_aggs_tx[0],
-    #     all_maps_and_aggs_tx[1],
-    #     "tx",
-    #     "Atomic",
-    #     builder_color_map,
-    # )
-    # nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
-    #     all_maps_and_aggs_vol[2],
-    #     all_maps_and_aggs_vol[3],
-    #     "vol",
-    #     "Non-atomic",
-    #     builder_color_map,
-    # )
-
     nonatomic_vol_bar = create_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_vol[2],
         all_maps_and_aggs_vol[3],
@@ -842,7 +667,6 @@ def create_html_page():
                 head,
                 nonatomic_intro,
                 nonatomic_bar,
-                # nonatomic_notable_bar,
                 nonatomic_pie,
             ],
         ),
@@ -853,7 +677,6 @@ def create_html_page():
                 head,
                 atomic_intro,
                 atomic_bar,
-                # atomic_notable_bar,
                 atomic_pie,
             ],
         ),
