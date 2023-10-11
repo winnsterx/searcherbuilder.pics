@@ -19,7 +19,11 @@ def analyze_tx(
     builder_atomic_map_vol_list,
 ):
     mev_type = tx["mev_type"]
-    if mev_type == "sandwich" or mev_type == "swap":
+
+    if mev_type == "swap" and tx["protocol"] == "multiple":
+        print("found a tx that is swap w multiple protocols")
+        mev_type = "uncertain"
+    elif mev_type == "sandwich" or mev_type == "swap":
         return
 
     addr_to = tx["address_to"].lower()
@@ -56,7 +60,6 @@ def analyze_tx(
         if addr_to not in addrs_counted_in_block:
             builder_atomic_map_block[builder][addr_to] += 1
             addrs_counted_in_block.add(addr_to)
-
     elif mev_type == "backrun":
         # counting both txs in a sandwich
         builder_atomic_map_tx[builder][addr_to][mev_type] += 1
@@ -86,10 +89,29 @@ def analyze_tx(
         if addr_from not in addrs_counted_in_block:
             builder_atomic_map_block[builder][addr_from] += 1
             addrs_counted_in_block.add(addr_from)
+    # for swaps that are likely atomic MEV due to their multiple hop nature
+    elif mev_type == "uncertain":
+        builder_atomic_map_tx[builder][addr_to][mev_type] += 1
+        user_volume = tx.get("user_swap_volume_usd", 0) or 0
+        builder_atomic_map_vol[builder][addr_to][mev_type] += user_volume
+        builder_atomic_map_vol_list[builder][addr_to].append(user_volume)
+        builder_atomic_map_tx[builder][addr_to]["total"] += 1
+        builder_atomic_map_vol[builder][addr_to]["total"] += user_volume
+
+        if addr_to not in addrs_counted_in_block:
+            builder_atomic_map_block[builder][addr_to] += 1
+            addrs_counted_in_block.add(addr_to)
 
 
 def default_searcher_dic():
-    return {"total": 0, "arb": 0, "frontrun": 0, "backrun": 0, "liquid": 0}
+    return {
+        "total": 0,
+        "arb": 0,
+        "frontrun": 0,
+        "backrun": 0,
+        "liquid": 0,
+        "uncertain": 0,
+    }
 
 
 def compile_atomic_data(
@@ -151,3 +173,7 @@ def compile_atomic_data(
         "atomic/fourteen/builder_atomic_maps/builder_atomic_map_bribe.json",
     )
     helpers.dump_dict_to_json(agg_bribe, "atomic/fourteen/agg/agg_bribe.json")
+
+
+# if __name__ == "__main__":
+#     block = helpers.load_dict_from_json("blockchain_data/block_data/small_block.json")

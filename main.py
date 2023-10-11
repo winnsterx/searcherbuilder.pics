@@ -105,7 +105,6 @@ def update_zeromev_file(new_start, new_end):
 
 def update_block_files(new_start, new_end):
     # new_start = 18035586
-    # new_end = 18035588
     # new_end = new_start + 1000
     print("New start and end block num", new_start, new_end)
     old_blocks = helpers.load_dict_from_json(BLOCK_FILE)

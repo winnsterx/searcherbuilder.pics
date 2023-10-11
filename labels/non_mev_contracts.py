@@ -14856,6 +14856,7 @@ ORDERFLOW_LABELS = {
     "UNISWAP_V3_ROUTER_1": "0xe592427a0aece92de3edee1f18e0157c05861564",
     "UNISWAP_V3_ROUTER_2": "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45",
     "UNISWAP_X": "0x6000da47483062a0d734ba3dc7576ce6a0b645c4",
+    "INSTADAPP": "0x01d1f55d94a53a9517c07f793f35320faa0d2dcf"
 }
 
 
@@ -14864,5 +14865,5 @@ ALL_LABELED_CONTRACTS = (
     | set(TELEGRAM_BOTS.values())
     | set(LABELED_CONTRACTS.values())
     | set(ORDERFLOW_LABELS.values())
-    | set(get_trending_contracts().values())
+    # | set(get_trending_contracts().values())
 )

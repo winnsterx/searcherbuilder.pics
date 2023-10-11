@@ -93,7 +93,7 @@ def analyze_tx(
     if mev_type == "sandwich":
         return
 
-    elif mev_type == "swap":
+    elif mev_type == "swap" and tx["protocol"] != "multiple":
         nonatomic_mev.analyze_tx(
             block_number,
             builder,
@@ -116,6 +116,8 @@ def analyze_tx(
             tob_bribe,
         )
     else:
+        # if tx has touched multiple protocol, it is more likely to be an atomic MEV tx
+        # i.e. onchain arb.
         atomic_mev.analyze_tx(
             builder,
             tx,

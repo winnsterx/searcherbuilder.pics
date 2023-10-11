@@ -240,7 +240,7 @@ def create_searcher_builder_percentage_bar_chart(
     map, agg, mev_domain, metric, builder_color_map
 ):
     fig = go.Figure()
-    top_searchers = helpers.slice_dict(agg, 20)
+    top_searchers = helpers.slice_dict(agg, 25)
     builder_market_share = {}
 
     span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by Total {}</span></span>'
@@ -307,40 +307,20 @@ def create_searcher_builder_percentage_bar_chart(
         yaxis_title="Searcher Addresses",
         barmode="stack",
         legend={"traceorder": "normal"},
-        margin={"t": 120, "l": 10},  # what gives the spacing between title and plot
+        margin={"t": 150, "l": 10},  # what gives the spacing between title and plot
         font=dict(family="Courier New, monospace", color="black"),
-        height=700,
+        height=850,
     )
 
     return fig
 
 
-def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
-    if len(title_2) > 1:  # if not combined
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br />{}<br /><span style="font-size: 15px;">By {}</span></span>'
-        title_layout = {
-            "text": span.format(title_1, title_2, convert_metric_for_title(metric)),
-            "y": 0.9,
-            "x": 0.5,
-            "xanchor": "center",
-            "yanchor": "top",
-        }
-    else:
-        span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{}<br /><span style="font-size: 15px;">By {}</span></span>'
-        title_layout = {
-            "text": span.format(title_1, convert_metric_for_title(metric)),
-            "y": 0.9,
-            "x": 0.5,
-            "xanchor": "center",
-            "yanchor": "top",
-        }
-        legend = True
-
-    small_searchers = {k: agg[k] for k in list(agg.keys())[25:]}
-    agg = {k: agg[k] for k in list(agg)[:25]}
+def create_searcher_pie_chart(agg, mev_domain, metric):
+    small_searchers = {k: agg[k] for k in list(agg.keys())[30:]}
+    agg = {k: agg[k] for k in list(agg)[:30]}
     agg.update({"Others": sum(small_searchers.values())})
 
-    searchers = [abbreviate_label(s) for s in list(agg.keys())]
+    searchers = [abbreviate_label(s, True) for s in list(agg.keys())]
     counts = list(agg.values())
     unit = get_unit_from_metric(metric)
     fig = go.Figure(
@@ -360,8 +340,8 @@ def create_searcher_pie_chart(agg, title_1, title_2, metric, legend=False):
 
     # Setting layout details
     fig.update_layout(
-        title=title_layout,
-        showlegend=legend,
+        title=generate_pie_title(metric, mev_domain),
+        showlegend=True,
         font=dict(family="Courier New, monospace", color="black"),
         height=550,
     )
@@ -404,9 +384,9 @@ def return_sorted_map_and_agg_pruned_of_known_entities_and_atomc(metric):
     nonatomic_map, nonatomic_agg = helpers.prune_known_entities_from_map_and_agg(
         nonatomic_map, nonatomic_agg
     )
-    nonatomic_map, nonatomic_agg = helpers.remove_atomic_from_map_and_agg(
-        nonatomic_map, nonatomic_agg, atomic_agg
-    )
+    # nonatomic_map, nonatomic_agg = helpers.remove_atomic_from_map_and_agg(
+    #     nonatomic_map, nonatomic_agg, atomic_agg
+    # )
     nonatomic_map, nonatomic_agg = helpers.get_map_and_agg_in_range(
         nonatomic_map, nonatomic_agg, 0.99
     )
@@ -474,6 +454,12 @@ def generate_title(metric, mev_domain):
     return title
 
 
+def generate_pie_title(metric, mev_domain):
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Market Share<br /><span style="font-size: 15px;">Measured by {}</span></span>'
+    title = span.format(mev_domain, convert_metric_for_title(metric))
+    return title
+
+
 def generate_xaxis_title(metric):
     if metric == "vol":
         return "Percentage of Volume"
@@ -483,7 +469,9 @@ def generate_xaxis_title(metric):
         return "Percentage of Transactions"
 
 
-def create_toggle(fig_prime, fig_bribe, fig_sec, metric, metric_sec, mev_domain):
+def create_bar_charts_with_toggle(
+    fig_prime, fig_bribe, fig_sec, metric, metric_sec, mev_domain
+):
     # Combine the figures. Set the other ones as invisible initially.
     max_traces = max(len(fig_prime.data), len(fig_bribe.data), len(fig_sec.data))
 
@@ -584,6 +572,87 @@ def create_toggle(fig_prime, fig_bribe, fig_sec, metric, metric_sec, mev_domain)
     return combined_fig
 
 
+def create_pie_charts_with_toggle(
+    fig_prime, fig_bribe, fig_sec, metric, metric_sec, mev_domain
+):
+    combined_fig = fig_prime
+    for trace in fig_bribe.data:
+        trace.visible = False
+        combined_fig.add_trace(trace)
+
+    for trace in fig_sec.data:
+        trace.visible = False
+        combined_fig.add_trace(trace)
+
+    # Create a dropdown for the toggle effect
+    combined_fig.update_layout(
+        updatemenus=[
+            {
+                "type": "dropdown",
+                "direction": "down",
+                "active": 0,
+                "showactive": True,
+                "x": 1.3,
+                "y": 1.08,
+                "xanchor": "right",
+                "yanchor": "bottom",
+                "buttons": [
+                    {
+                        "label": convert_metric_for_title(metric),
+                        "method": "update",
+                        "args": [
+                            {"visible": [True, False, False]},
+                            {
+                                "title": {
+                                    "text": generate_pie_title(metric, mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "label": "Bribes (ETH)",
+                        "method": "update",
+                        "args": [
+                            {"visible": [False, True, False]},
+                            {
+                                "title": {
+                                    "text": generate_pie_title(metric, mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "label": convert_metric_for_title(metric_sec),
+                        "method": "update",
+                        "args": [
+                            {"visible": [False, False, True]},
+                            {
+                                "title": {
+                                    "text": generate_pie_title(metric_sec, mev_domain),
+                                    "y": 0.9,
+                                    "x": 0.05,
+                                    "xanchor": "left",
+                                    "yanchor": "top",
+                                },
+                            },
+                        ],
+                    },
+                ],
+            }
+        ]
+    )
+
+    return combined_fig
+
+
 def create_html_page():
     all_builders_keys = list(
         helpers.load_dict_from_json(
@@ -612,20 +681,20 @@ def create_html_page():
         ]
     )
 
-    atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
-        all_maps_and_aggs_tx[0],
-        all_maps_and_aggs_tx[1],
-        "tx",
-        "Atomic",
-        builder_color_map,
-    )
-    nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
-        all_maps_and_aggs_vol[2],
-        all_maps_and_aggs_vol[3],
-        "vol",
-        "Non-atomic",
-        builder_color_map,
-    )
+    # atomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
+    #     all_maps_and_aggs_tx[0],
+    #     all_maps_and_aggs_tx[1],
+    #     "tx",
+    #     "Atomic",
+    #     builder_color_map,
+    # )
+    # nonatomic_notable_bar = create_notable_searcher_builder_percentage_bar_chart(
+    #     all_maps_and_aggs_vol[2],
+    #     all_maps_and_aggs_vol[3],
+    #     "vol",
+    #     "Non-atomic",
+    #     builder_color_map,
+    # )
 
     nonatomic_vol_bar = create_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_vol[2],
@@ -651,7 +720,7 @@ def create_html_page():
         builder_color_map,
     )
 
-    nonatomic_bar = create_toggle(
+    nonatomic_bar = create_bar_charts_with_toggle(
         nonatomic_vol_bar,
         nonatomic_bribe_bar,
         nonatomic_tx_bar,
@@ -684,22 +753,59 @@ def create_html_page():
         builder_color_map,
     )
 
-    atomic_bar = create_toggle(
+    atomic_bar = create_bar_charts_with_toggle(
         atomic_tx_bar, atomic_bribe_bar, atomic_vol_bar, "tx", "vol", "Atomic"
     )
 
     atomic_searcher_pie_tx = create_searcher_pie_chart(
         all_maps_and_aggs_tx[1],
-        "Atomic Searchers Market Shares",
-        "",
+        "Atomic",
         "tx",
+    )
+
+    atomic_searcher_pie_bribe = create_searcher_pie_chart(
+        all_maps_and_aggs_bribe[1],
+        "Atomic",
+        "bribe",
+    )
+    atomic_searcher_pie_vol = create_searcher_pie_chart(
+        all_maps_and_aggs_vol[1],
+        "Atomic",
+        "vol",
+    )
+    atomic_pie = create_pie_charts_with_toggle(
+        atomic_searcher_pie_tx,
+        atomic_searcher_pie_bribe,
+        atomic_searcher_pie_vol,
+        "tx",
+        "vol",
+        "Atomic",
     )
 
     nonatomic_searcher_pie_vol = create_searcher_pie_chart(
         all_maps_and_aggs_vol[3],
-        "Non-atomic Searchers Market Shares",
-        "",
+        "Non-atomic",
         "vol",
+    )
+
+    nonatomic_searcher_pie_bribe = create_searcher_pie_chart(
+        all_maps_and_aggs_bribe[3],
+        "Non-atomic",
+        "bribe",
+    )
+    nonatomic_searcher_pie_tx = create_searcher_pie_chart(
+        all_maps_and_aggs_tx[3],
+        "Non-atomic",
+        "tx",
+    )
+
+    nonatomic_pie = create_pie_charts_with_toggle(
+        nonatomic_searcher_pie_vol,
+        nonatomic_searcher_pie_bribe,
+        nonatomic_searcher_pie_tx,
+        "vol",
+        "tx",
+        "Non-atomic",
     )
 
     title = "# <p style='text-align: center;margin:0px;'> Searcher-Builder Relationship Dashboard </p>"
@@ -736,8 +842,8 @@ def create_html_page():
                 head,
                 nonatomic_intro,
                 nonatomic_bar,
-                nonatomic_notable_bar,
-                nonatomic_searcher_pie_vol,
+                # nonatomic_notable_bar,
+                nonatomic_pie,
             ],
         ),
         dp.Page(
@@ -747,8 +853,8 @@ def create_html_page():
                 head,
                 atomic_intro,
                 atomic_bar,
-                atomic_notable_bar,
-                atomic_searcher_pie_tx,
+                # atomic_notable_bar,
+                atomic_pie,
             ],
         ),
     )
