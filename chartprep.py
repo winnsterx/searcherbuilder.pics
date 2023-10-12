@@ -432,7 +432,7 @@ def create_pie_charts_with_toggle(
                 "direction": "down",
                 "active": 0,
                 "showactive": True,
-                "x": 1.3,
+                "x": 1.25,
                 "y": 1.08,
                 "xanchor": "right",
                 "yanchor": "bottom",
