@@ -59,10 +59,9 @@ def get_builder_colors_map(list_of_builders):
     i = 0
 
     for alias in builder_addr_map.extraData_builder_mapping.values():
-        if i > 5:
+        if i >= len(top_builder_colors):
             break
         builder_color_map[alias] = top_builder_colors[i]
-
         i += 1
 
     for idx, builder in enumerate(list_of_builders):
@@ -647,7 +646,7 @@ def create_html_page():
 
     nonatomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
-        <strong>Non-atomic MEV</strong> refers to primarily CEX-DEX arbitrage (& minimally, cross-chain arbitrage).<br><br>
+        <strong>Non-atomic MEV</strong> refers to CEX-DEX arbitrage.<br><br>
         Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the orderflow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV.
     </div>
     """

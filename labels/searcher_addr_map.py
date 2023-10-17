@@ -26,6 +26,6 @@ SEARCHER_ADDR_LABEL_MAP = {
     WINTERMUTE_3: "Wintermute 3",
     WINTERMUTE_4: "Wintermute 4",
     WINTERMUTE_5: "Wintermute 5",
-    BOBABABE: "boba-babe",
-    C0FFEEBABE: "c0ffeebabe",
+    BOBABABE: "0xb0bababe",
+    C0FFEEBABE: "0xc0ffeebabe",
 }

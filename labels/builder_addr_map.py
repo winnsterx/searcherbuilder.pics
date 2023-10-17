@@ -68,6 +68,11 @@ BUILDER_ADDR_MAP = {
     "uwu": [UWUBUILDER],
 }
 
+known_anons = {
+    "0x3bee5122e2a2fbe11287aafb0cb918e22abb5436": "Builder 0x3bee",
+    "0x5638cbdc72bd8554055883d309cfc70357190cf3": "Builder 0x5638",
+}
+
 extraData_builder_mapping = {
     "rsync": "rsync-builder",
     "beaverbuild": "beaverbuild",
@@ -79,10 +84,10 @@ extraData_builder_mapping = {
     "bloxroute": "bloXroute",
     "buildai": "buildAI",
     "f1b": "f1b.io",
-    "eden": "Eden Network",
     "ethbuilder": "eth-builder",
-    "antbuilder": "antbuilder",
     "boba": "boba-builder",
+    "eden": "Eden Network",
+    "antbuilder": "antbuilder",
     "lightspeed": "lightspeedbuilder",
     "payload": "payload.de",
     "gambit": "Gambit Labs",

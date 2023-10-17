@@ -52,7 +52,10 @@ def check_keys_in_string(extra_data):
 
 def map_extra_data_to_builder(extra_data, feeRecipient):
     builder = re.sub(r"\W+", "", extra_data)
-    if builder == "":
+    is_known_anon = feeRecipient in builder_addr_map.known_anons.keys()
+    if is_known_anon:
+        builder = builder_addr_map.known_anons[feeRecipient]
+    elif builder == "":
         builder = feeRecipient
     # elif "geth" in builder or "nethermind" in builder or "linux" in builder:
     #     builder = "vanilla_builder"

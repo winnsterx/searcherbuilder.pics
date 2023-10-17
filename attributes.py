@@ -8,6 +8,11 @@ top_color_list = [
     "#d7a4f5",
     "#bf84b6",
     "#b37475",
+    "#99bc6c",
+    "#EE77BA",
+    "#215816",
+    "#6E9EE6",
+    "#C48527",
 ]
 
 color_list = [
