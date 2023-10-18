@@ -82,7 +82,7 @@ def create_searcher_builder_percentage_bar_chart(
     top_searchers = helpers.slice_dict(agg, 25)
     builder_market_share = {}
 
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by Total {}</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Flow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by Total {}</span></span>'
 
     for builder, searchers in map.items():
         builder_market_share[builder] = sum(searchers.values())
@@ -288,7 +288,7 @@ def add_dummy_traces_to_match(fig, target_num_traces):
 
 
 def generate_title(metric, mev_domain):
-    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Orderflow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
+    span = '<span style="font-size: 1.4rem;font-weight:bold; margin-bottom: 10px;">{} Searchers Flow Breakdown by Builder<br /><span style="font-size: 15px;">Ranked by {}</span></span>'
     title = span.format(mev_domain, convert_metric_for_title(metric))
     return title
 
@@ -647,14 +647,14 @@ def create_html_page():
     nonatomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Non-atomic MEV</strong> refers to CEX-DEX arbitrage.<br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the orderflow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV.
     </div>
     """
 
     atomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Atomic MEV</strong> refers to <strong>DEX-DEX arbitrage, sandwiching, and liquidation.</strong><br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the orderflow that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>transaction count</strong> and <strong>bribe</strong> as the most reliable metric for atomic MEV.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>transaction count</strong> and <strong>bribe</strong> as the most reliable metric for atomic MEV.
     </div>
     """
 

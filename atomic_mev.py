@@ -21,7 +21,6 @@ def analyze_tx(
     mev_type = tx["mev_type"]
 
     if mev_type == "swap" and tx["protocol"] == "multiple":
-        print("found a tx that is swap w multiple protocols")
         mev_type = "uncertain"
     elif mev_type == "sandwich" or mev_type == "swap":
         return
