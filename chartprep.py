@@ -528,6 +528,7 @@ def create_html_page():
         builder_color_map,
     )
 
+
     nonatomic_bribe_bar = create_searcher_builder_percentage_bar_chart(
         all_maps_and_aggs_bribe[2],
         all_maps_and_aggs_bribe[3],
@@ -750,11 +751,33 @@ def create_html_page():
 
     with open(secret_keys.HTML_PATH + "/index.html", "r") as file:
         f = file.read()
-    OG_STUFF = ' <title>searcherbuilder.pics | Searcher Builder Dashboard</title>\n<meta charset="UTF-8" />\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:site" content="@winnsterx">\n<meta name="twitter:title" content="Searcher Builder Dashboard">\n<meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">\n<meta name="twitter:image" content="https://www.searcherbuilder.pics/">\n<meta property="og:title" content=Searcher Builder Dashboard>\n<meta property="og:site_name" content=searcherbuilder.pics>\n<meta property="og:url" content=searcherbuilder.pics>\n<meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum." >\n<meta property="og:type" content=website>\n<link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />\n<meta property="og:image" content=https://mevboost.toniwahrstaetter.com/pv.png>\n<meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">\n<meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">\n <meta name="author" content="Toni Wahrstätter">'
-    f = f.replace('<meta charset="UTF-8" />\n', fixedposi + OG_STUFF + more_css)  # + GA
+
+    # Direct URL to the raw image on GitHub
+    twitter_image_url = "https://raw.githubusercontent.com/winnsterx/winnsterx.github.io/main/preview.png"
+
+    # Replace the existing twitter:image and og:image content with the new URL
+    OG_STUFF = f""" <title>searcherbuilder.pics | Searcher Builder Dashboard</title>
+    <meta charset="UTF-8" />
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@winnsterx">
+    <meta name="twitter:title" content="Searcher Builder Dashboard">
+    <meta name="twitter:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">
+    <meta name="twitter:image" content="{twitter_image_url}">
+    <meta property="og:title" content="Searcher Builder Dashboard">
+    <meta property="og:site_name" content="searcherbuilder.pics">
+    <meta property="og:url" content="https://www.searcherbuilder.pics/">
+    <meta property="og:description" content="Selected comparative visualizations on searcher-builder relationship on Ethereum.">
+    <meta property="og:type" content="website">
+    <link rel="shortcut icon" href="https://mevboost.toniwahrstaetter.com/ethlogo.png" />
+    <meta property="og:image" content="{twitter_image_url}">
+    <meta name="description" content="Up-to-date comparative visualizations on MEV-Boost and Proposer Builder Separation on Ethereum.">
+    <meta name="keywords" content="Ethereum, MEV-Boost, PBS, Dashboard">
+    <meta name="author" content="Toni Wahrstätter">"""
+
+    f = f.replace('<meta charset="UTF-8" />\n', fixedposi + OG_STUFF + more_css)  # Assuming fixedposi and more_css are defined previously
+
     with open(secret_keys.HTML_PATH + "/index.html", "w") as file:
         file.write(f)
-
 
 if __name__ == "__main__":
     create_html_page()
