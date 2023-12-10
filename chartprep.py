@@ -546,11 +546,11 @@ def create_html_page():
     )
 
     nonatomic_bar = create_bar_charts_with_toggle(
-        nonatomic_vol_bar,
-        nonatomic_bribe_bar,
         nonatomic_tx_bar,
-        "vol",
+        nonatomic_bribe_bar,
+        nonatomic_vol_bar,
         "tx",
+        "vol",
         "Non-atomic",
     )
 
@@ -625,11 +625,11 @@ def create_html_page():
     )
 
     nonatomic_pie = create_pie_charts_with_toggle(
-        nonatomic_searcher_pie_vol,
-        nonatomic_searcher_pie_bribe,
         nonatomic_searcher_pie_tx,
-        "vol",
+        nonatomic_searcher_pie_bribe,
+        nonatomic_searcher_pie_vol,
         "tx",
+        "vol",
         "Non-atomic",
     )
 
@@ -647,15 +647,15 @@ def create_html_page():
 
     nonatomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
-        <strong>Non-atomic MEV</strong> refers to CEX-DEX arbitrage.<br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV.
+        <strong>Non-atomic MEV</strong> refers to mostly CEX-DEX arbitrage.<br><br>
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we collect all directional swaps and identify non-atomic MEV transactions using these <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/e084727a0bf09f990d1aef090a4aef7e3df78b72/nonatomic_mev.py#L19" style="color: #4c51ff;">heuristics</a>. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that non-atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>volume</strong> and <strong>bribe</strong> as the most reliable metric for non-atomic MEV. The figures presented here are strictly <strong>lower-bound</strong>.
     </div>
     """
 
     atomic_intro = """
     <div style='background-color: white; padding: 2rem; margin-top: 2rem; border-radius: 1rem; border: 3px solid #4c51ff;'>
         <strong>Atomic MEV</strong> refers to <strong>DEX-DEX arbitrage, sandwiching, and liquidation.</strong><br><br>
-        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>transaction count</strong> and <strong>bribe</strong> as the most reliable metric for atomic MEV.
+        Using <a href="https://data.zeromev.org/docs/" style="color: #4c51ff;">Zeromev API</a>, we identify DEX-DEX arbitrage, sandwiching, and liquidation transactions. We filter out transactions sent to <a href="https://github.com/winnsterx/searcherbuilder.pics/blob/main/labels/non_mev_contracts.py" style="color: #4c51ff;">known non-MEV smart contracts</a>. Examining the flow that atomic searchers sent to each builder, we can infer potentially exclusive searcher-builder relationships. We recommend <strong>transaction count</strong> and <strong>bribe</strong> as the most reliable metric for atomic MEV. The figures presented here are strictly <strong>lower-bound</strong>.
     </div>
     """
 
